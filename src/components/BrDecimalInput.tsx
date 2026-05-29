@@ -8,7 +8,7 @@ import { inputClass } from "../styles/forms";
 interface BrDecimalInputProps {
   value: string;
   onChange: (value: string) => void;
-  /** Casas decimais (peso/qtd: 3; valores R$: 2) */
+  /** Casas decimais (peso/qtd e valores R$: 2) */
   decimals?: number;
   className?: string;
   placeholder?: string;

@@ -175,8 +175,8 @@ export function ReceiptOrderModal({
       docFiscal: initialData.mercadoria_documento_fiscal || "",
       notaFiscal: initialData.mercadoria_nota_fiscal || "",
       valor: formatBrDecimalFromUnknown(initialData.mercadoria_valor, 2),
-      qtd: formatBrDecimalFromUnknown(initialData.mercadoria_quantidade, 3),
-      peso: formatBrDecimalFromUnknown(initialData.mercadoria_peso, 3),
+      qtd: formatBrDecimalFromUnknown(initialData.mercadoria_quantidade, 2),
+      peso: formatBrDecimalFromUnknown(initialData.mercadoria_peso, 2),
       unidade: initialData.mercadoria_unidade || "KG",
     });
     setValores({
@@ -570,19 +570,19 @@ export function ReceiptOrderModal({
               <div>
                 <label className={labelClass}>Quantidade</label>
                 <BrDecimalInput
-                  decimals={3}
+                  decimals={2}
                   value={mercadoria.qtd}
                   onChange={(qtd) => setMercadoria({ ...mercadoria, qtd })}
-                  placeholder="0,000"
+                  placeholder="0,00"
                 />
               </div>
               <div>
                 <label className={labelClass}>Peso (kg)</label>
                 <BrDecimalInput
-                  decimals={3}
+                  decimals={2}
                   value={mercadoria.peso}
                   onChange={(peso) => setMercadoria({ ...mercadoria, peso })}
-                  placeholder="18.500,000"
+                  placeholder="18.500,00"
                 />
               </div>
               <div>

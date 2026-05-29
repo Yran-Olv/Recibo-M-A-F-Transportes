@@ -1235,8 +1235,8 @@ function normalizeReceiptForSave(receipt: Receipt): Receipt {
   return {
     ...receipt,
     mercadoria_valor: toDbNumber(receipt.mercadoria_valor, 15, 2),
-    mercadoria_quantidade: toDbNumber(receipt.mercadoria_quantidade, 15, 3),
-    mercadoria_peso: toDbNumber(receipt.mercadoria_peso, 15, 3),
+    mercadoria_quantidade: toDbNumber(receipt.mercadoria_quantidade, 15, 2),
+    mercadoria_peso: toDbNumber(receipt.mercadoria_peso, 15, 2),
     valor_seguro: toDbNumber(receipt.valor_seguro, 15, 2),
     valor_icms: toDbNumber(receipt.valor_icms, 15, 2),
     valor_outros: toDbNumber(receipt.valor_outros, 15, 2),
