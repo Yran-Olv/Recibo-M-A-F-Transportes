@@ -146,6 +146,82 @@ export interface Receipt {
   created_at?: string;
 }
 
+function pgErrorMessage(e: unknown): string {
+  const err = e as { code?: string; detail?: string; message?: string };
+  if (err.code === "23505") return "Já existe um cadastro com este nome.";
+  if (err.code === "23502") return "Preencha os campos obrigatórios (nome, endereço, cidade e UF).";
+  if (err.code === "42P10") {
+    return "Banco desatualizado: rode sudo ./update.sh no servidor para corrigir índices.";
+  }
+  return err.detail || err.message || "Erro ao salvar no banco de dados.";
+}
+
+function mapCatalogRow(row: Record<string, unknown>): CatalogItem {
+  return {
+    id: Number(row.id),
+    nome: String(row.nome ?? ""),
+    endereco: String(row.endereco ?? ""),
+    cidade: String(row.cidade ?? ""),
+    estado: String(row.estado ?? ""),
+    cnpj_cpf: String(row.cnpj_cpf ?? ""),
+    inscricao_estadual: String(row.inscricao_estadual ?? ""),
+    placa: row.placa != null ? String(row.placa) : undefined,
+    cpf: row.cpf != null ? String(row.cpf) : undefined,
+    telefone: row.telefone != null ? String(row.telefone) : undefined,
+  };
+}
+
+function normalizePersonCatalog(item: CatalogItem): CatalogItem {
+  const nome = item.nome?.trim();
+  if (!nome) throw new Error("Nome é obrigatório.");
+  return {
+    ...item,
+    nome,
+    endereco: item.endereco?.trim() || "",
+    cidade: item.cidade?.trim() || "",
+    estado: (item.estado?.trim() || "").toUpperCase().slice(0, 2),
+    cnpj_cpf: item.cnpj_cpf?.trim() || "",
+    inscricao_estadual: item.inscricao_estadual?.trim() || "",
+  };
+}
+
+/** INSERT; se o nome já existir (23505), atualiza o cadastro existente. */
+async function insertOrUpdatePersonCatalog(
+  table: "senders" | "recipients",
+  data: CatalogItem
+): Promise<CatalogItem> {
+  if (!pool) throw new Error("Banco de dados indisponível.");
+  const cols =
+    "nome, endereco, cidade, estado, cnpj_cpf, inscricao_estadual";
+  const vals = [
+    data.nome,
+    data.endereco,
+    data.cidade,
+    data.estado,
+    data.cnpj_cpf,
+    data.inscricao_estadual,
+  ];
+  try {
+    const res = await pool.query(
+      `INSERT INTO ${table} (${cols}) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      vals
+    );
+    return mapCatalogRow(res.rows[0]);
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === "23505") {
+      const upd = await pool.query(
+        `UPDATE ${table} SET endereco=$2, cidade=$3, estado=$4, cnpj_cpf=$5, inscricao_estadual=$6
+         WHERE UPPER(TRIM(nome)) = UPPER(TRIM($1))
+         RETURNING *`,
+        vals
+      );
+      if (upd.rows[0]) return mapCatalogRow(upd.rows[0]);
+    }
+    throw new Error(pgErrorMessage(e));
+  }
+}
+
 async function migrateSchema(client: pg.PoolClient) {
   const alters = [
     `ALTER TABLE company_profile ADD COLUMN IF NOT EXISTS email VARCHAR(255)`,
@@ -177,9 +253,16 @@ async function migrateSchema(client: pg.PoolClient) {
       id SERIAL PRIMARY KEY,
       nome VARCHAR(255) UNIQUE NOT NULL
     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS senders_nome_unique ON senders (nome)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS recipients_nome_unique ON recipients (nome)`,
   ];
   for (const sql of alters) {
-    await client.query(sql);
+    try {
+      await client.query(sql);
+    } catch (e) {
+      const code = (e as { code?: string }).code;
+      if (code !== "23505" && code !== "42P07") console.warn("migrateSchema:", sql.slice(0, 60), e);
+    }
   }
 }
 
@@ -684,34 +767,16 @@ export async function saveCompanyProfile(profile: CompanyProfile): Promise<Compa
 // 2. Senders Catalogs
 export async function getSenders(): Promise<CatalogItem[]> {
   if (isPostgresActive && pool) {
-    try {
-      const res = await pool.query("SELECT * FROM senders ORDER BY nome ASC");
-      return res.rows;
-    } catch (e) {
-      console.error("PG error index senders:", e);
-    }
+    const res = await pool.query("SELECT * FROM senders ORDER BY nome ASC");
+    return res.rows.map((r) => mapCatalogRow(r));
   }
   return readJsonDb().senders;
 }
 
 export async function addSender(sender: CatalogItem): Promise<CatalogItem> {
+  const data = normalizePersonCatalog(sender);
   if (isPostgresActive && pool) {
-    try {
-      const res = await pool.query(`
-        INSERT INTO senders (nome, endereco, cidade, estado, cnpj_cpf, inscricao_estadual)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (nome) DO UPDATE SET
-          endereco = EXCLUDED.endereco,
-          cidade = EXCLUDED.cidade,
-          estado = EXCLUDED.estado,
-          cnpj_cpf = EXCLUDED.cnpj_cpf,
-          inscricao_estadual = EXCLUDED.inscricao_estadual
-        RETURNING *
-      `, [sender.nome, sender.endereco, sender.cidade, sender.estado, sender.cnpj_cpf, sender.inscricao_estadual]);
-      return res.rows[0];
-    } catch (e) {
-      console.error("PG error add sender:", e);
-    }
+    return insertOrUpdatePersonCatalog("senders", data);
   }
   const db = readJsonDb();
   const existingIndex = db.senders.findIndex(s => s.nome.toUpperCase() === sender.nome?.toUpperCase());
@@ -728,21 +793,24 @@ export async function addSender(sender: CatalogItem): Promise<CatalogItem> {
 }
 
 export async function updateSender(id: number, sender: CatalogItem): Promise<CatalogItem> {
-  const nome = sender.nome?.trim();
-  if (!nome) throw new Error("Nome é obrigatório");
+  const data = normalizePersonCatalog({ ...sender, id });
   if (isPostgresActive && pool) {
-    const res = await pool.query(
-      `UPDATE senders SET nome=$1, endereco=$2, cidade=$3, estado=$4, cnpj_cpf=$5, inscricao_estadual=$6
-       WHERE id=$7 RETURNING *`,
-      [nome, sender.endereco || "", sender.cidade || "", sender.estado || "", sender.cnpj_cpf || "", sender.inscricao_estadual || "", id]
-    );
-    if (!res.rows[0]) throw new Error("Remetente não encontrado.");
-    return res.rows[0];
+    try {
+      const res = await pool.query(
+        `UPDATE senders SET nome=$1, endereco=$2, cidade=$3, estado=$4, cnpj_cpf=$5, inscricao_estadual=$6
+         WHERE id=$7 RETURNING *`,
+        [data.nome, data.endereco, data.cidade, data.estado, data.cnpj_cpf, data.inscricao_estadual, id]
+      );
+      if (!res.rows[0]) throw new Error("Remetente não encontrado.");
+      return mapCatalogRow(res.rows[0]);
+    } catch (e) {
+      throw new Error(pgErrorMessage(e));
+    }
   }
   const db = readJsonDb();
   const idx = db.senders.findIndex((s) => s.id === id);
   if (idx < 0) throw new Error("Remetente não encontrado.");
-  const updated = { ...db.senders[idx], ...sender, nome };
+  const updated = { ...db.senders[idx], ...data };
   db.senders[idx] = updated;
   writeJsonDb(db);
   return updated;
@@ -751,34 +819,16 @@ export async function updateSender(id: number, sender: CatalogItem): Promise<Cat
 // 3. Recipients Catalogs
 export async function getRecipients(): Promise<CatalogItem[]> {
   if (isPostgresActive && pool) {
-    try {
-      const res = await pool.query("SELECT * FROM recipients ORDER BY nome ASC");
-      return res.rows;
-    } catch (e) {
-      console.error("PG error index recipients:", e);
-    }
+    const res = await pool.query("SELECT * FROM recipients ORDER BY nome ASC");
+    return res.rows.map((r) => mapCatalogRow(r));
   }
   return readJsonDb().recipients;
 }
 
 export async function addRecipient(recipient: CatalogItem): Promise<CatalogItem> {
+  const data = normalizePersonCatalog(recipient);
   if (isPostgresActive && pool) {
-    try {
-      const res = await pool.query(`
-        INSERT INTO recipients (nome, endereco, cidade, estado, cnpj_cpf, inscricao_estadual)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (nome) DO UPDATE SET
-          endereco = EXCLUDED.endereco,
-          cidade = EXCLUDED.cidade,
-          estado = EXCLUDED.estado,
-          cnpj_cpf = EXCLUDED.cnpj_cpf,
-          inscricao_estadual = EXCLUDED.inscricao_estadual
-        RETURNING *
-      `, [recipient.nome, recipient.endereco, recipient.cidade, recipient.estado, recipient.cnpj_cpf, recipient.inscricao_estadual]);
-      return res.rows[0];
-    } catch (e) {
-      console.error("PG error add recipient:", e);
-    }
+    return insertOrUpdatePersonCatalog("recipients", data);
   }
   const db = readJsonDb();
   const existingIndex = db.recipients.findIndex(r => r.nome.toUpperCase() === recipient.nome?.toUpperCase());
@@ -795,21 +845,24 @@ export async function addRecipient(recipient: CatalogItem): Promise<CatalogItem>
 }
 
 export async function updateRecipient(id: number, recipient: CatalogItem): Promise<CatalogItem> {
-  const nome = recipient.nome?.trim();
-  if (!nome) throw new Error("Nome é obrigatório");
+  const data = normalizePersonCatalog({ ...recipient, id });
   if (isPostgresActive && pool) {
-    const res = await pool.query(
-      `UPDATE recipients SET nome=$1, endereco=$2, cidade=$3, estado=$4, cnpj_cpf=$5, inscricao_estadual=$6
-       WHERE id=$7 RETURNING *`,
-      [nome, recipient.endereco || "", recipient.cidade || "", recipient.estado || "", recipient.cnpj_cpf || "", recipient.inscricao_estadual || "", id]
-    );
-    if (!res.rows[0]) throw new Error("Destinatário não encontrado.");
-    return res.rows[0];
+    try {
+      const res = await pool.query(
+        `UPDATE recipients SET nome=$1, endereco=$2, cidade=$3, estado=$4, cnpj_cpf=$5, inscricao_estadual=$6
+         WHERE id=$7 RETURNING *`,
+        [data.nome, data.endereco, data.cidade, data.estado, data.cnpj_cpf, data.inscricao_estadual, id]
+      );
+      if (!res.rows[0]) throw new Error("Destinatário não encontrado.");
+      return mapCatalogRow(res.rows[0]);
+    } catch (e) {
+      throw new Error(pgErrorMessage(e));
+    }
   }
   const db = readJsonDb();
   const idx = db.recipients.findIndex((r) => r.id === id);
   if (idx < 0) throw new Error("Destinatário não encontrado.");
-  const updated = { ...db.recipients[idx], ...recipient, nome };
+  const updated = { ...db.recipients[idx], ...data };
   db.recipients[idx] = updated;
   writeJsonDb(db);
   return updated;

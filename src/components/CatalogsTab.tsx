@@ -4,7 +4,17 @@ import { Users, Truck, Sparkles, MapPin, Search, PlusCircle, UserCheck, Trash2, 
 import { api } from "../api";
 import { CnpjLookupInput } from "./CnpjLookupInput";
 import { BrMaskedInput } from "./BrMaskedInput";
+import { AppDialog, type AppDialogVariant } from "./AppDialog";
 import type { CnpjLookupResult } from "../types/cnpj";
+
+type DialogState = {
+  open: boolean;
+  variant: AppDialogVariant;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  onConfirm?: () => void;
+};
 
 interface CatalogsTabProps {
   senders: CatalogItem[];
@@ -74,6 +84,31 @@ export function CatalogsTab({
   const [vehicleLink, setVehicleLink] = useState<VehicleLinkMode>("new");
   const [existingVehicleId, setExistingVehicleId] = useState("");
   const [agenteId, setAgenteId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [dialog, setDialog] = useState<DialogState>({
+    open: false,
+    variant: "info",
+    title: "",
+    message: "",
+  });
+
+  const showDialog = (
+    variant: AppDialogVariant,
+    title: string,
+    message: string,
+    opts?: { confirmLabel?: string; onConfirm?: () => void }
+  ) => {
+    setDialog({
+      open: true,
+      variant,
+      title,
+      message,
+      confirmLabel: opts?.confirmLabel,
+      onConfirm: opts?.onConfirm,
+    });
+  };
+
+  const closeDialog = () => setDialog((d) => ({ ...d, open: false }));
 
   const resetCatalogForm = () => {
     setNome("");
@@ -169,19 +204,20 @@ export function CatalogsTab({
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
 
     try {
       if (activeCatalog === "fleet") {
         if (!nome.trim()) {
-          alert("Informe o nome do motorista.");
+          showDialog("error", "Campo obrigatório", "Informe o nome do motorista.");
           return;
         }
         if (vehicleLink === "new" && !placa.trim()) {
-          alert("Informe a placa do caminhão do motorista.");
+          showDialog("error", "Campo obrigatório", "Informe a placa do caminhão do motorista.");
           return;
         }
         if (vehicleLink === "existing" && !existingVehicleId) {
-          alert("Selecione o caminhão já cadastrado para associar.");
+          showDialog("error", "Campo obrigatório", "Selecione o caminhão já cadastrado para associar.");
           return;
         }
 
@@ -218,7 +254,7 @@ export function CatalogsTab({
         }
       } else if (activeCatalog === "faturas" || activeCatalog === "agentes") {
         if (!nome.trim()) {
-          alert("Informe o nome.");
+          showDialog("error", "Campo obrigatório", "Informe o nome.");
           return;
         }
         const simpleUrl = isEditing
@@ -228,11 +264,18 @@ export function CatalogsTab({
           method: isEditing ? "PUT" : "POST",
           body: JSON.stringify({ nome: nome.trim() }),
         });
-        if (!response.ok) throw new Error("Erro ao salvar");
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error((err as { error?: string }).error || "Erro ao salvar");
+        }
         const savedItem = await response.json();
         if (activeCatalog === "faturas") onAddFatura(savedItem);
         else onAddAgente(savedItem);
       } else {
+        if (!nome.trim()) {
+          showDialog("error", "Campo obrigatório", "Informe o nome da empresa ou produtor.");
+          return;
+        }
         const payload: CatalogItem = {
           nome: nome.trim(),
           endereco: endereco.trim(),
@@ -260,9 +303,30 @@ export function CatalogsTab({
 
       resetCatalogForm();
       setShowAddForm(false);
+      const label =
+        activeCatalog === "fleet"
+          ? "Motorista"
+          : activeCatalog === "faturas"
+            ? "Fatura"
+            : activeCatalog === "agentes"
+              ? "Agente"
+              : activeCatalog === "recipients"
+                ? "Destinatário"
+                : "Remetente";
+      showDialog(
+        "success",
+        isEditing ? "Alterações salvas" : "Cadastro realizado",
+        `${label} salvo com sucesso.`
+      );
     } catch (err) {
       console.error("Erro ao registrar catalogo:", err);
-      alert(err instanceof Error ? err.message : "Ocorreu um erro ao salvar o registro no catálogo.");
+      showDialog(
+        "error",
+        "Não foi possível salvar",
+        err instanceof Error ? err.message : "Ocorreu um erro ao salvar o registro no catálogo."
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -291,26 +355,32 @@ export function CatalogsTab({
     </td>
   );
 
-  const handleDelete = async (id: number, label: string) => {
-    if (!window.confirm(`Excluir "${label}" do catálogo?`)) return;
-    const path = `/api/catalog/${catalogKey}/${id}`;
-    try {
-      const res = await api(path, { method: "DELETE" });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      if (!data.success) {
-        alert("Registro não encontrado.");
-        return;
-      }
-      if (catalogKey === "senders") onDeleteSender?.(id);
-      else if (catalogKey === "recipients") onDeleteRecipient?.(id);
-      else if (catalogKey === "drivers") onDeleteDriver?.(id);
-      else if (catalogKey === "vehicles") onDeleteVehicle?.(id);
-      else if (catalogKey === "faturas") onDeleteFatura?.(id);
-      else onDeleteAgente?.(id);
-    } catch {
-      alert("Erro ao excluir cadastro.");
-    }
+  const handleDelete = (id: number, label: string) => {
+    showDialog("confirm", "Excluir cadastro", `Excluir "${label}" do catálogo?`, {
+      confirmLabel: "Excluir",
+      onConfirm: async () => {
+        closeDialog();
+        const path = `/api/catalog/${catalogKey}/${id}`;
+        try {
+          const res = await api(path, { method: "DELETE" });
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          if (!data.success) {
+            showDialog("error", "Não encontrado", "Registro não encontrado.");
+            return;
+          }
+          if (catalogKey === "senders") onDeleteSender?.(id);
+          else if (catalogKey === "recipients") onDeleteRecipient?.(id);
+          else if (catalogKey === "drivers") onDeleteDriver?.(id);
+          else if (catalogKey === "vehicles") onDeleteVehicle?.(id);
+          else if (catalogKey === "faturas") onDeleteFatura?.(id);
+          else onDeleteAgente?.(id);
+          showDialog("success", "Excluído", `"${label}" removido do catálogo.`);
+        } catch {
+          showDialog("error", "Erro ao excluir", "Não foi possível excluir o cadastro.");
+        }
+      },
+    });
   };
 
   const getActiveList = (): CatalogItem[] => {
@@ -347,6 +417,16 @@ export function CatalogsTab({
   });
 
   return (
+    <>
+    <AppDialog
+      open={dialog.open}
+      variant={dialog.variant}
+      title={dialog.title}
+      message={dialog.message}
+      confirmLabel={dialog.confirmLabel}
+      onClose={closeDialog}
+      onConfirm={dialog.onConfirm}
+    />
     <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-6 items-start animate-fade-in">
       
       {/* Sidebar Selector (3 cols) */}
@@ -752,9 +832,10 @@ export function CatalogsTab({
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition shadow-sm"
+                disabled={saving}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition shadow-sm disabled:opacity-60"
               >
-                {isEditing ? "Salvar alterações" : "Confirmar cadastro"}
+                {saving ? "Salvando…" : isEditing ? "Salvar alterações" : "Confirmar cadastro"}
               </button>
             </div>
           </form>
@@ -860,5 +941,6 @@ export function CatalogsTab({
 
       </div>
     </div>
+    </>
   );
 }

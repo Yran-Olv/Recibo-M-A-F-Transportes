@@ -24,6 +24,7 @@ import {
   formatPlaca,
   formatTelefone,
 } from "../utils/cnpj";
+import { AppDialog, type AppDialogVariant } from "./AppDialog";
 
 const STEPS = [
   { id: 1, title: "Remetente", icon: FileText },
@@ -76,6 +77,16 @@ export function ReceiptOrderModal({
   const isEditing = !!(initialData?.id);
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  const [dialog, setDialog] = useState<{
+    open: boolean;
+    variant: AppDialogVariant;
+    title: string;
+    message: string;
+  }>({ open: false, variant: "info", title: "", message: "" });
+
+  const showDialog = (variant: AppDialogVariant, title: string, message: string) => {
+    setDialog({ open: true, variant, title, message });
+  };
   const [autoNumber, setAutoNumber] = useState("");
   const [isBlank, setIsBlank] = useState(false);
 
@@ -269,7 +280,7 @@ export function ReceiptOrderModal({
     for (let n = step; n < target; n++) {
       const err = validateStepNumber(n);
       if (err) {
-        alert(err);
+        showDialog("error", "Campo obrigatório", err);
         setStep(n);
         return;
       }
@@ -309,7 +320,9 @@ export function ReceiptOrderModal({
       onCreated(data as Receipt, { isEdit: isEditing });
       onClose();
     } catch (e) {
-      alert(
+      showDialog(
+        "error",
+        isEditing ? "Erro ao salvar" : "Erro ao emitir",
         e instanceof Error
           ? e.message
           : isEditing
@@ -368,6 +381,14 @@ export function ReceiptOrderModal({
   };
 
   return (
+    <>
+    <AppDialog
+      open={dialog.open}
+      variant={dialog.variant}
+      title={dialog.title}
+      message={dialog.message}
+      onClose={() => setDialog((d) => ({ ...d, open: false }))}
+    />
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50">
       <div
         className="bg-white w-full sm:max-w-3xl max-h-[100dvh] sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
@@ -757,5 +778,6 @@ export function ReceiptOrderModal({
         </div>
       </div>
     </div>
+    </>
   );
 }

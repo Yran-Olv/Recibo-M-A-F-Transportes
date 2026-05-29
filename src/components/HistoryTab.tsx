@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Receipt } from "../types";
 import { Search, Printer, Copy, Trash2, Pencil, Calendar, ArrowRight, CornerDownRight, Tag, FileText, BadgeCheck } from "lucide-react";
 import { api } from "../api";
+import { AppDialog, type AppDialogVariant } from "./AppDialog";
 
 interface HistoryTabProps {
   receipts: Receipt[];
@@ -19,21 +20,41 @@ export function HistoryTab({
   onDeleteReceipt,
 }: HistoryTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [dialog, setDialog] = useState<{
+    open: boolean;
+    variant: AppDialogVariant;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm?: () => void;
+  }>({ open: false, variant: "info", title: "", message: "" });
 
-  const handleDelete = async (id: number, numberStr: string) => {
-    if (!window.confirm(`Tem certeza absoluta que deseja excluir o recibo Nº ${numberStr}? Esta operação é irreversível.`)) {
-      return;
-    }
-    
-    try {
-      const response = await api(`/api/receipts/${id}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("Erro ao excluir do servidor.");
-      
-      onDeleteReceipt(id);
-    } catch (e) {
-      console.error(e);
-      alert("Falha ao excluir o recibo.");
-    }
+  const closeDialog = () => setDialog((d) => ({ ...d, open: false }));
+
+  const handleDelete = (id: number, numberStr: string) => {
+    setDialog({
+      open: true,
+      variant: "confirm",
+      title: "Excluir recibo",
+      message: `Tem certeza que deseja excluir o recibo Nº ${numberStr}? Esta operação é irreversível.`,
+      confirmLabel: "Excluir",
+      onConfirm: async () => {
+        closeDialog();
+        try {
+          const response = await api(`/api/receipts/${id}`, { method: "DELETE" });
+          if (!response.ok) throw new Error("Erro ao excluir do servidor.");
+          onDeleteReceipt(id);
+        } catch (e) {
+          console.error(e);
+          setDialog({
+            open: true,
+            variant: "error",
+            title: "Falha ao excluir",
+            message: "Não foi possível excluir o recibo. Tente novamente.",
+          });
+        }
+      },
+    });
   };
 
   // Filter receipts by number, sender name or recipient name
@@ -68,6 +89,16 @@ export function HistoryTab({
   };
 
   return (
+    <>
+    <AppDialog
+      open={dialog.open}
+      variant={dialog.variant}
+      title={dialog.title}
+      message={dialog.message}
+      confirmLabel={dialog.confirmLabel}
+      onClose={closeDialog}
+      onConfirm={dialog.onConfirm}
+    />
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
       
       <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
@@ -234,5 +265,6 @@ export function HistoryTab({
       )}
 
     </div>
+    </>
   );
 }
