@@ -48,13 +48,10 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="flex flex-col items-center mb-8">
-          <SiteLogo
-            showText={false}
-            imgClassName="h-24 w-auto max-w-[300px] object-contain drop-shadow-lg mb-4"
-          />
-          <h1 className="text-2xl font-bold text-white">M.A.F Transportes</h1>
-          <p className="text-slate-400 text-sm mt-1">{SITE_TAGLINE}</p>
+        <div className="flex flex-col items-center mb-8 text-center">
+          <SiteLogo showText={false} size="hero" className="justify-center mb-6 sm:mb-8" />
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">M.A.F Transportes</h1>
+          <p className="text-slate-400 text-sm sm:text-base mt-1">{SITE_TAGLINE}</p>
         </div>
 
         <form

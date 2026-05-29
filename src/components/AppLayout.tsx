@@ -89,9 +89,9 @@ export function AppLayout({
     <>
       <div className="flex items-center gap-2 px-3 py-4 border-b border-slate-200/80">
         <SiteLogo
+          size="sidebar"
           showText={sidebarOpen || mobileNav}
           subtitle={SITE_TAGLINE}
-          imgClassName="h-12 w-auto max-w-[168px] object-contain"
           className="flex-1 min-w-0"
         />
         {!mobileNav && (
