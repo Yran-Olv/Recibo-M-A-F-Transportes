@@ -31,7 +31,7 @@ MAF_PORT_END="${MAF_PORT_END:-3020}"
 
 log()  { echo "==> $*"; }
 ok()   { echo "✓ $*"; }
-warn() { echo "⚠ $*"; }
+warn() { echo "⚠ $*" >&2; }
 die()  { echo "✗ $*" >&2; exit 1; }
 
 # sudo costuma fechar stdin — ler do terminal real
@@ -108,6 +108,9 @@ random_password() {
 
 set_env_var() {
   local key="$1" value="$2" file=".env"
+  if [[ "$key" == "MAF_HOST_PORT" ]] && [[ ! "$value" =~ ^[0-9]+$ ]]; then
+    die "MAF_HOST_PORT deve ser só número (recebido: ${value:0:80}...)"
+  fi
   [[ -f "$file" ]] || touch "$file"
   if grep -q "^${key}=" "$file"; then
     local tmp
@@ -125,6 +128,21 @@ set_env_var() {
 get_env_var() {
   local key="$1" default="${2:-}"
   [[ -f .env ]] && grep -q "^${key}=" .env && grep "^${key}=" .env | head -1 | cut -d= -f2- || echo "$default"
+}
+
+# Corrige .env quebrado (ex.: MAF_HOST_PORT com texto de aviso dentro do valor)
+repair_env_file() {
+  [[ -f .env ]] || return 0
+  local line val
+  if grep -q "^MAF_HOST_PORT=" .env; then
+    line="$(grep "^MAF_HOST_PORT=" .env | head -1 | cut -d= -f2-)"
+    if [[ ! "$line" =~ ^[0-9]+$ ]]; then
+      val="$(printf '%s' "$line" | grep -oE '[0-9]+' | tail -1)"
+      val="${val:-3012}"
+      warn "MAF_HOST_PORT inválido no .env — corrigindo para ${val}"
+      set_env_var MAF_HOST_PORT "$val"
+    fi
+  fi
 }
 
 load_env() {
@@ -412,7 +430,9 @@ ensure_env() {
   log "Verificando porta da aplicação..."
   local app_port prev_port
   prev_port="$(get_env_var MAF_HOST_PORT)"
+  [[ "$prev_port" =~ ^[0-9]+$ ]] || prev_port=""
   app_port="$(find_app_port)"
+  [[ "$app_port" =~ ^[0-9]+$ ]] || die "Não foi possível escolher porta da app (recebido: ${app_port:0:60})"
   set_env_var MAF_HOST_PORT "$app_port"
   describe_port "$app_port"
   if [[ -n "$prev_port" ]] && [[ "$prev_port" != "$app_port" ]]; then
@@ -558,6 +578,7 @@ deploy_app() {
   local host_port prev
   prev="$(get_env_var MAF_HOST_PORT)"
   host_port="$(find_app_port)"
+  [[ "$host_port" =~ ^[0-9]+$ ]] || die "Porta inválida: ${host_port:0:60}"
   set_env_var MAF_HOST_PORT "$host_port"
   load_env
   describe_port "$host_port"
@@ -705,6 +726,8 @@ main() {
   echo ""
 
   [[ -f package-lock.json ]] || die "Execute na pasta do projeto (git clone …/maf-recibos)"
+
+  repair_env_file
 
   if [[ "$app_only" -eq 1 ]]; then
     log "Modo --app-only (Docker + Nginx + Certbot)"
