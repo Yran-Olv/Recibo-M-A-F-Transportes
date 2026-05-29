@@ -117,7 +117,7 @@ install_system_deps() {
 
   log "Pacotes do sistema..."
   as_root apt-get update -qq
-  as_root apt-get install -y -qq git curl ca-certificates gnupg lsb-release ss
+  as_root apt-get install -y -qq git curl ca-certificates gnupg lsb-release iproute2
 
   if ! node_ok; then
     log "Node.js 20..."
