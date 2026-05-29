@@ -21,7 +21,7 @@ const NAV: { id: ActiveTab; label: string; desc: string; icon: React.ElementType
   { id: "form", label: "Novo espelho", desc: "Emitir frete / viagem", icon: FileCheck },
   { id: "history", label: "Histórico", desc: "Espelhos emitidos", icon: History },
   { id: "catalogs", label: "Cadastros", desc: "Clientes, motoristas e frota", icon: Database },
-  { id: "company", label: "Empresa", desc: "Logo e dados fiscais", icon: Settings2 },
+  { id: "company", label: "Empresas", desc: "Emitentes do espelho", icon: Settings2 },
   { id: "account", label: "Conta", desc: "Senha e usuários", icon: UserCircle },
 ];
 

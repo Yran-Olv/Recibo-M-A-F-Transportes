@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import {
-  getCompanyProfile,
+  getCompanies,
   getSenders,
   getRecipients,
   getDrivers,
@@ -27,7 +27,7 @@ export async function exportFullSnapshot() {
   return {
     exported_at: new Date().toISOString(),
     source: isUsingPostgres() ? "postgresql" : "json",
-    company_profile: await getCompanyProfile(),
+    companies: await getCompanies(),
     senders: await getSenders(),
     recipients: await getRecipients(),
     drivers: await getDrivers(),

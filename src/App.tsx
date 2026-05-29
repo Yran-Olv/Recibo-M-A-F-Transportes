@@ -33,6 +33,7 @@ const EMPTY_COMPANY: CompanyProfile = {
 export default function App() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [activeTab, setActiveTab] = useState<ActiveTab>("form");
+  const [companies, setCompanies] = useState<CompanyProfile[]>([]);
   const [company, setCompany] = useState<CompanyProfile>(EMPTY_COMPANY);
   const [senders, setSenders] = useState<CatalogItem[]>([]);
   const [recipients, setRecipients] = useState<CatalogItem[]>([]);
@@ -68,8 +69,19 @@ export default function App() {
           setDatabaseMode(health.database);
         }
       }
-      const companyRes = await api("/api/company");
-      if (companyRes.ok) setCompany(await companyRes.json());
+      const companiesRes = await api("/api/companies");
+      if (companiesRes.ok) {
+        const list = (await companiesRes.json()) as CompanyProfile[];
+        setCompanies(list);
+        setCompany(list[0] ?? EMPTY_COMPANY);
+      } else {
+        const companyRes = await api("/api/company");
+        if (companyRes.ok) {
+          const one = await companyRes.json();
+          setCompanies([one]);
+          setCompany(one);
+        }
+      }
       const sendersRes = await api("/api/catalog/senders");
       if (sendersRes.ok) setSenders(await sendersRes.json());
       const recipientsRes = await api("/api/catalog/recipients");
@@ -128,7 +140,10 @@ export default function App() {
     if (tab === "form") setSelectedReceiptForEdit(null);
   };
 
-  const handleSaveCompany = (updated: CompanyProfile) => setCompany(updated);
+  const handleCompaniesChange = (list: CompanyProfile[]) => {
+    setCompanies(list);
+    setCompany(list[0] ?? EMPTY_COMPANY);
+  };
 
   const handleAddSender = (item: CatalogItem) => {
     setSenders((prev) => {
@@ -312,7 +327,7 @@ export default function App() {
             )}
               {activeTab === "form" && (
                 <ReceiptFormTab
-                  company={company}
+                  companies={companies}
                   senders={senders}
                   recipients={recipients}
                   drivers={drivers}
@@ -362,7 +377,7 @@ export default function App() {
               />
             )}
             {activeTab === "company" && (
-              <CompanyProfileTab company={company} onSaveCompany={handleSaveCompany} />
+              <CompanyProfileTab companies={companies} onCompaniesChange={handleCompaniesChange} />
             )}
             {activeTab === "account" && <AccountTab isAdmin={authUser?.role === "admin"} />}
           </>
@@ -379,17 +394,13 @@ export default function App() {
                   Espelho nº {printPreviewReceipt.numero_recibo}
                 </p>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  A4 — clique em Imprimir; use margens <strong>Padrão</strong> ou <strong>Mínimas</strong>
+                  A4 — ao imprimir, desative <strong>Cabeçalhos e rodapés</strong> no navegador (remove URL e data).
                 </p>
               </div>
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() =>
-                    printReceiptDocument("print-document", {
-                      driverName: printPreviewReceipt.motorista_nome,
-                    })
-                  }
+                  onClick={() => printReceiptDocument("print-document")}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg cursor-pointer flex items-center gap-2"
                 >
                   <Printer className="w-4 h-4" /> Imprimir
@@ -407,7 +418,9 @@ export default function App() {
               <ReceiptPrintout
                 printRootId="print-document"
                 receipt={printPreviewReceipt}
-                company={company}
+                company={
+                  companies.find((c) => c.id === printPreviewReceipt.company_id) ?? company
+                }
                 isBlank={printPreviewReceipt.is_blank}
               />
             </div>

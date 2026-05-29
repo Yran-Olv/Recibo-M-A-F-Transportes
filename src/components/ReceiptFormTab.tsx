@@ -4,7 +4,7 @@ import { Plus, FileText, Users, Truck, AlertTriangle, History, Database, CheckCi
 import { ReceiptOrderModal } from "./ReceiptOrderModal";
 
 interface ReceiptFormTabProps {
-  company: CompanyProfile;
+  companies: CompanyProfile[];
   senders: CatalogItem[];
   recipients: CatalogItem[];
   drivers: CatalogItem[];
@@ -23,7 +23,7 @@ interface ReceiptFormTabProps {
 }
 
 export function ReceiptFormTab({
-  company,
+  companies,
   senders,
   recipients,
   drivers,
@@ -46,7 +46,9 @@ export function ReceiptFormTab({
     if (initialReceiptData) setModalOpen(true);
   }, [initialReceiptData]);
 
-  const companyReady = !!(company.nome_empresa?.trim() && company.cnpj?.trim());
+  const companyReady = companies.some(
+    (c) => !!(c.nome_empresa?.trim() && c.cnpj?.trim())
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -54,8 +56,8 @@ export function ReceiptFormTab({
         <div className="flex gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
           <AlertTriangle className="w-5 h-5 shrink-0" />
           <p>
-            Configure os <strong>dados da empresa</strong> no menu lateral antes de emitir o primeiro
-            espelho (razão social, CNPJ e endereço).
+            Cadastre ao menos uma <strong>empresa emitente</strong> no menu <strong>Empresas</strong>{" "}
+            (razão social, CNPJ e endereço) antes de emitir o primeiro espelho.
           </p>
         </div>
       )}
@@ -150,7 +152,7 @@ export function ReceiptFormTab({
           setModalOpen(false);
           onDismissInitial?.();
         }}
-        company={company}
+        companies={companies}
         senders={senders}
         recipients={recipients}
         drivers={drivers}

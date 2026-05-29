@@ -8,7 +8,10 @@ import { createServer as createViteServer } from "vite";
 import {
   initDb,
   getCompanyProfile,
+  getCompanies,
+  getCompanyById,
   saveCompanyProfile,
+  deleteCompanyProfile,
   getSenders,
   addSender,
   updateSender,
@@ -119,7 +122,25 @@ async function startServer() {
     return requireAuth(req, res, next);
   });
 
-  app.get("/api/company", async (req, res) => {
+  app.get("/api/companies", async (_req, res) => {
+    try {
+      res.json(await getCompanies());
+    } catch (err: unknown) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Erro" });
+    }
+  });
+
+  app.get("/api/companies/:id", async (req, res) => {
+    try {
+      const company = await getCompanyById(parseInt(req.params.id, 10));
+      if (!company) return res.status(404).json({ error: "Empresa não encontrada." });
+      res.json(company);
+    } catch (err: unknown) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Erro" });
+    }
+  });
+
+  app.get("/api/company", async (_req, res) => {
     try {
       res.json(await getCompanyProfile());
     } catch (err: unknown) {
@@ -133,6 +154,24 @@ async function startServer() {
       res.json({ success: true, company: saved });
     } catch (err: unknown) {
       res.status(500).json({ error: err instanceof Error ? err.message : "Erro" });
+    }
+  });
+
+  app.post("/api/companies", async (req, res) => {
+    try {
+      const saved = await saveCompanyProfile(req.body);
+      res.json({ success: true, company: saved });
+    } catch (err: unknown) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Erro" });
+    }
+  });
+
+  app.delete("/api/companies/:id", async (req, res) => {
+    try {
+      const ok = await deleteCompanyProfile(parseInt(req.params.id, 10));
+      res.json({ success: ok });
+    } catch (err: unknown) {
+      res.status(400).json({ error: err instanceof Error ? err.message : "Erro" });
     }
   });
 

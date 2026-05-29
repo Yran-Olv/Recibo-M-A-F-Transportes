@@ -8,6 +8,7 @@ import {
   Truck,
   ClipboardCheck,
   Loader2,
+  Building2,
 } from "lucide-react";
 import { Receipt, CatalogItem, CompanyProfile } from "../types";
 import { api } from "../api";
@@ -31,6 +32,7 @@ import {
 import { AppDialog, type AppDialogVariant } from "./AppDialog";
 
 const STEPS = [
+  { id: 0, title: "Empresa", icon: Building2 },
   { id: 1, title: "Remetente", icon: FileText },
   { id: 2, title: "Destinatário", icon: FileText },
   { id: 3, title: "Carga e valores", icon: Package },
@@ -41,7 +43,7 @@ const STEPS = [
 interface ReceiptOrderModalProps {
   open: boolean;
   onClose: () => void;
-  company: CompanyProfile;
+  companies: CompanyProfile[];
   senders: CatalogItem[];
   recipients: CatalogItem[];
   drivers: CatalogItem[];
@@ -63,7 +65,7 @@ function faturaFromMotorista(driver: SearchableItem): string {
 export function ReceiptOrderModal({
   open,
   onClose,
-  company,
+  companies,
   senders,
   recipients,
   drivers,
@@ -77,7 +79,8 @@ export function ReceiptOrderModal({
   onAddVehicle,
 }: ReceiptOrderModalProps) {
   const isEditing = !!(initialData?.id);
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
+  const [companyId, setCompanyId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [dialog, setDialog] = useState<{
     open: boolean;
@@ -138,6 +141,16 @@ export function ReceiptOrderModal({
   const [selMotorista, setSelMotorista] = useState<SearchableItem | null>(null);
   const [selVeiculo, setSelVeiculo] = useState<SearchableItem | null>(null);
   useEffect(() => {
+    if (!open) return;
+    if (companies.length === 1 && companies[0].id) {
+      setCompanyId(companies[0].id);
+    }
+    if (!isEditing && !initialData) {
+      setStep(0);
+    }
+  }, [open, companies, isEditing, initialData]);
+
+  useEffect(() => {
     if (!open || isEditing) return;
     api("/api/receipts/next")
       .then((r) => r.json())
@@ -195,8 +208,9 @@ export function ReceiptOrderModal({
       fatura: initialData.fatura_nome?.trim() || motoristaNome,
       agente: initialData.agente_nome?.trim() || "",
     });
+    setCompanyId(initialData.company_id ?? companies[0]?.id ?? null);
     setStep(1);
-  }, [open, initialData]);
+  }, [open, initialData, companies]);
 
   useEffect(() => {
     const s = parseBrDecimalFromUser(valores.seguro);
@@ -209,6 +223,7 @@ export function ReceiptOrderModal({
     numero_recibo: numero.trim() || autoNumber,
     data_recibo: data,
     is_blank: isBlank,
+    company_id: companyId ?? companies[0]?.id ?? 1,
     remetente_nome: remetente.nome,
     remetente_endereco: remetente.endereco,
     remetente_cidade: remetente.cidade,
@@ -241,7 +256,12 @@ export function ReceiptOrderModal({
     veiculo_estado: transporte.uf,
     fatura_nome: transporte.fatura.trim() || transporte.motorista.trim(),
     agente_nome: transporte.agente.trim(),
-  }), [numero, autoNumber, data, isBlank, remetente, destinatario, mercadoria, valores, obs, transporte]);
+  }), [numero, autoNumber, data, isBlank, companyId, companies, remetente, destinatario, mercadoria, valores, obs, transporte]);
+
+  const emitCompany = useMemo(
+    () => companies.find((c) => c.id === companyId) ?? companies[0],
+    [companies, companyId]
+  );
 
   if (!open) return null;
 
@@ -261,7 +281,56 @@ export function ReceiptOrderModal({
     });
   };
 
+  const persistSenderToCatalog = async () => {
+    if (!remetente.nome.trim()) return;
+    try {
+      const res = await api("/api/catalog/senders", {
+        method: "POST",
+        body: JSON.stringify({
+          nome: remetente.nome.trim(),
+          endereco: remetente.endereco.trim(),
+          cidade: remetente.cidade.trim(),
+          estado: remetente.estado.trim().toUpperCase(),
+          cnpj_cpf: remetente.cnpj_cpf.trim(),
+          inscricao_estadual: remetente.ie.trim(),
+        }),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        onAddSender(saved);
+        setSelRemetente(saved);
+      }
+    } catch {
+      /* mantém fluxo do espelho */
+    }
+  };
+
+  const persistRecipientToCatalog = async () => {
+    if (!destinatario.nome.trim()) return;
+    try {
+      const res = await api("/api/catalog/recipients", {
+        method: "POST",
+        body: JSON.stringify({
+          nome: destinatario.nome.trim(),
+          endereco: destinatario.endereco.trim(),
+          cidade: destinatario.cidade.trim(),
+          estado: destinatario.estado.trim().toUpperCase(),
+          cnpj_cpf: destinatario.cnpj_cpf.trim(),
+          inscricao_estadual: destinatario.ie.trim(),
+        }),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        onAddRecipient(saved);
+        setSelDestinatario(saved);
+      }
+    } catch {
+      /* mantém fluxo do espelho */
+    }
+  };
+
   const validateStepNumber = (n: number): string | null => {
+    if (n === 0 && !companyId) return "Selecione qual empresa emitirá este espelho.";
     if (isBlank) return null;
     if (n === 1 && !remetente.nome.trim()) return "Selecione ou informe o remetente.";
     if (n === 2 && !destinatario.nome.trim()) return "Selecione ou informe o destinatário.";
@@ -271,8 +340,8 @@ export function ReceiptOrderModal({
     return null;
   };
 
-  const goToStep = (target: number) => {
-    if (target < 1 || target > 5 || target === step) return;
+  const goToStep = async (target: number) => {
+    if (target < 0 || target > 5 || target === step) return;
 
     if (target < step) {
       setStep(target);
@@ -286,13 +355,15 @@ export function ReceiptOrderModal({
         setStep(n);
         return;
       }
+      if (n === 1) await persistSenderToCatalog();
+      if (n === 2) await persistRecipientToCatalog();
     }
     setStep(target);
   };
 
-  const next = () => goToStep(Math.min(5, step + 1));
+  const next = () => void goToStep(Math.min(5, step + 1));
 
-  const back = () => goToStep(Math.max(1, step - 1));
+  const back = () => void goToStep(Math.max(0, step - 1));
 
   const emit = async () => {
     setSubmitting(true);
@@ -476,6 +547,49 @@ export function ReceiptOrderModal({
               >
                 Ir para revisão e emitir
               </button>
+            </div>
+          )}
+
+          {step === 0 && (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">
+                Escolha qual empresa aparecerá no cabeçalho deste espelho (logo, CNPJ e endereço).
+              </p>
+              {companies.length === 0 ? (
+                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  Nenhuma empresa cadastrada. Vá em <strong>Empresas</strong> no menu e cadastre ao menos uma.
+                </p>
+              ) : (
+                <div className="grid gap-2">
+                  {companies.map((c) => (
+                    <label
+                      key={c.id}
+                      className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition ${
+                        companyId === c.id
+                          ? "border-emerald-500 bg-emerald-50/80"
+                          : "border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="emit-company"
+                        className="mt-1"
+                        checked={companyId === c.id}
+                        onChange={() => setCompanyId(c.id ?? null)}
+                      />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900">
+                          {c.nome_fantasia?.trim() || c.nome_empresa || "Sem nome"}
+                        </p>
+                        {c.nome_fantasia && c.nome_fantasia !== c.nome_empresa && (
+                          <p className="text-xs text-slate-500">{c.nome_empresa}</p>
+                        )}
+                        <p className="text-xs text-slate-500 mt-0.5 font-mono">{c.cnpj || "—"}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -773,7 +887,7 @@ export function ReceiptOrderModal({
             <div className="space-y-4">
               <p className="text-sm text-slate-600">Confira o documento antes de emitir.</p>
               <div className="overflow-x-auto border rounded-xl p-2 bg-slate-100 max-h-[50vh]">
-                <ReceiptPrintout receipt={draft} company={company} isBlank={isBlank} />
+                <ReceiptPrintout receipt={draft} company={emitCompany!} isBlank={isBlank} />
               </div>
             </div>
           )}

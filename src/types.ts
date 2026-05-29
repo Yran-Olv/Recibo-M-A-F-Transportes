@@ -1,4 +1,5 @@
 export interface CompanyProfile {
+  id?: number;
   nome_empresa: string;
   nome_fantasia: string;
   cnpj: string;
@@ -51,6 +52,7 @@ export interface DriverSavePayload {
 
 export interface Receipt {
   id?: number;
+  company_id?: number;
   numero_recibo: string;
   data_recibo: string;
   has_qrcode?: boolean;

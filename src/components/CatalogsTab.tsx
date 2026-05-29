@@ -560,7 +560,7 @@ export function CatalogsTab({
                   ? "Cadastro só dos agentes. Na emissão do espelho você escolhe o agente na etapa Transporte."
                   : activeCatalog === "faturas"
                     ? "Tipos ou nomes de fatura usados no espelho (opcional; o padrão costuma ser o nome do motorista)."
-                    : "Preencha apenas com dados reais dos seus clientes."}
+                    : "Buscar CNPJ só preenche o formulário — clique em *Confirmar cadastro* uma vez para gravar no catálogo."}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

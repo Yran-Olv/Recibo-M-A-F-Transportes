@@ -52,6 +52,7 @@ const DEFAULT_JSON_DB = {
 
 // Types & Interfaces
 export interface CompanyProfile {
+  id?: number;
   nome_empresa: string;
   nome_fantasia: string;
   cnpj: string;
@@ -100,6 +101,7 @@ export interface DriverSavePayload {
 
 export interface Receipt {
   id?: number;
+  company_id?: number;
   numero_recibo: string;
   data_recibo: string;
   has_qrcode?: boolean;
@@ -259,6 +261,8 @@ async function migrateSchema(client: pg.PoolClient) {
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS senders_nome_unique ON senders (nome)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS recipients_nome_unique ON recipients (nome)`,
+    `ALTER TABLE receipts ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES company_profile(id) ON DELETE SET NULL`,
+    `UPDATE receipts SET company_id = 1 WHERE company_id IS NULL`,
   ];
   for (const sql of alters) {
     try {
@@ -657,115 +661,159 @@ export function getSessionStore(): SessionStore {
 }
 
 function mapCompanyRow(row: Record<string, unknown>): CompanyProfile {
-  return normalizeCompanyProfile({
-    nome_empresa: String(row.nome_empresa || ""),
-    nome_fantasia: String(row.nome_fantasia || ""),
-    cnpj: String(row.cnpj || ""),
-    inscricao_estadual: String(row.inscricao_estadual || ""),
-    endereco: String(row.endereco || ""),
-    endereco_logradouro: String(row.endereco_logradouro || ""),
-    endereco_numero: String(row.endereco_numero || ""),
-    endereco_complemento: String(row.endereco_complemento || ""),
-    endereco_bairro: String(row.endereco_bairro || ""),
-    endereco_cidade: String(row.endereco_cidade || ""),
-    endereco_estado: String(row.endereco_estado || ""),
-    telefone: String(row.telefone || ""),
-    email: String(row.email || ""),
-    cep: String(row.cep || ""),
-    logo_base64: String(row.logo_base64 || ""),
-  });
+  return {
+    id: row.id != null ? Number(row.id) : undefined,
+    ...normalizeCompanyProfile({
+      nome_empresa: String(row.nome_empresa || ""),
+      nome_fantasia: String(row.nome_fantasia || ""),
+      cnpj: String(row.cnpj || ""),
+      inscricao_estadual: String(row.inscricao_estadual || ""),
+      endereco: String(row.endereco || ""),
+      endereco_logradouro: String(row.endereco_logradouro || ""),
+      endereco_numero: String(row.endereco_numero || ""),
+      endereco_complemento: String(row.endereco_complemento || ""),
+      endereco_bairro: String(row.endereco_bairro || ""),
+      endereco_cidade: String(row.endereco_cidade || ""),
+      endereco_estado: String(row.endereco_estado || ""),
+      telefone: String(row.telefone || ""),
+      email: String(row.email || ""),
+      cep: String(row.cep || ""),
+      logo_base64: String(row.logo_base64 || ""),
+    }),
+  };
 }
 
-// 1. Company Profile CRUD
-export async function getCompanyProfile(): Promise<CompanyProfile> {
+function jsonCompaniesList(db: ReturnType<typeof readJsonDb>): CompanyProfile[] {
+  const raw = db as { companies?: CompanyProfile[]; company_profile?: CompanyProfile };
+  if (Array.isArray(raw.companies) && raw.companies.length > 0) {
+    return raw.companies.map((c, i) => ({
+      ...normalizeCompanyProfile(c),
+      id: c.id ?? i + 1,
+    }));
+  }
+  const one = normalizeCompanyProfile(raw.company_profile || DEFAULT_JSON_DB.company_profile);
+  return [{ ...one, id: 1 }];
+}
+
+function writeJsonCompanies(db: ReturnType<typeof readJsonDb>, list: CompanyProfile[]) {
+  const raw = db as { companies?: CompanyProfile[]; company_profile?: CompanyProfile };
+  raw.companies = list;
+  raw.company_profile = list[0] ? { ...list[0] } : DEFAULT_JSON_DB.company_profile;
+}
+
+const COMPANY_COLS = `nome_empresa, nome_fantasia, cnpj, inscricao_estadual, endereco,
+          endereco_logradouro, endereco_numero, endereco_complemento, endereco_bairro,
+          endereco_cidade, endereco_estado, telefone, email, cep, logo_base64`;
+
+function companyParams(normalized: CompanyProfile) {
+  return [
+    normalized.nome_empresa,
+    normalized.nome_fantasia,
+    normalized.cnpj,
+    normalized.inscricao_estadual,
+    normalized.endereco,
+    normalized.endereco_logradouro || "",
+    normalized.endereco_numero || "",
+    normalized.endereco_complemento || "",
+    normalized.endereco_bairro || "",
+    normalized.endereco_cidade || "",
+    normalized.endereco_estado || "",
+    normalized.telefone,
+    normalized.email || "",
+    normalized.cep || "",
+    normalized.logo_base64 || "",
+  ];
+}
+
+// 1. Empresas emitentes (várias)
+export async function getCompanies(): Promise<CompanyProfile[]> {
   if (isPostgresActive && pool) {
     try {
-      const res = await pool.query("SELECT * FROM company_profile ORDER BY id ASC LIMIT 1");
-      if (res.rows.length > 0) {
-        return mapCompanyRow(res.rows[0]);
-      }
+      const res = await pool.query("SELECT * FROM company_profile ORDER BY nome_empresa ASC, id ASC");
+      return res.rows.map((r) => mapCompanyRow(r));
     } catch (err) {
-      console.error("PG error, falling back to JSON:", err);
+      console.error("PG error getCompanies:", err);
     }
   }
-  const db = readJsonDb();
-  return normalizeCompanyProfile(db.company_profile);
+  return jsonCompaniesList(readJsonDb());
+}
+
+export async function getCompanyById(id: number): Promise<CompanyProfile | null> {
+  const list = await getCompanies();
+  return list.find((c) => c.id === id) ?? null;
+}
+
+/** Primeira empresa (compatibilidade). */
+export async function getCompanyProfile(): Promise<CompanyProfile> {
+  const list = await getCompanies();
+  return list[0] ?? normalizeCompanyProfile(DEFAULT_JSON_DB.company_profile);
 }
 
 export async function saveCompanyProfile(profile: CompanyProfile): Promise<CompanyProfile> {
   const normalized = normalizeCompanyProfile(profile);
+  const id = profile.id;
 
   if (isPostgresActive && pool) {
     try {
-      await pool.query(
-        `
-        INSERT INTO company_profile (
-          id, nome_empresa, nome_fantasia, cnpj, inscricao_estadual, endereco,
-          endereco_logradouro, endereco_numero, endereco_complemento, endereco_bairro,
-          endereco_cidade, endereco_estado, telefone, email, cep, logo_base64
-        )
-        VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-        ON CONFLICT (id) DO UPDATE SET
-          nome_empresa = EXCLUDED.nome_empresa,
-          nome_fantasia = EXCLUDED.nome_fantasia,
-          cnpj = EXCLUDED.cnpj,
-          inscricao_estadual = EXCLUDED.inscricao_estadual,
-          endereco = EXCLUDED.endereco,
-          endereco_logradouro = EXCLUDED.endereco_logradouro,
-          endereco_numero = EXCLUDED.endereco_numero,
-          endereco_complemento = EXCLUDED.endereco_complemento,
-          endereco_bairro = EXCLUDED.endereco_bairro,
-          endereco_cidade = EXCLUDED.endereco_cidade,
-          endereco_estado = EXCLUDED.endereco_estado,
-          telefone = EXCLUDED.telefone,
-          email = EXCLUDED.email,
-          cep = EXCLUDED.cep,
-          logo_base64 = EXCLUDED.logo_base64
-      `,
-        [
-          normalized.nome_empresa,
-          normalized.nome_fantasia,
-          normalized.cnpj,
-          normalized.inscricao_estadual,
-          normalized.endereco,
-          normalized.endereco_logradouro || "",
-          normalized.endereco_numero || "",
-          normalized.endereco_complemento || "",
-          normalized.endereco_bairro || "",
-          normalized.endereco_cidade || "",
-          normalized.endereco_estado || "",
-          normalized.telefone,
-          normalized.email || "",
-          normalized.cep || "",
-          normalized.logo_base64 || "",
-        ]
+      if (id) {
+        const res = await pool.query(
+          `UPDATE company_profile SET
+            nome_empresa=$1, nome_fantasia=$2, cnpj=$3, inscricao_estadual=$4, endereco=$5,
+            endereco_logradouro=$6, endereco_numero=$7, endereco_complemento=$8, endereco_bairro=$9,
+            endereco_cidade=$10, endereco_estado=$11, telefone=$12, email=$13, cep=$14, logo_base64=$15
+           WHERE id=$16 RETURNING *`,
+          [...companyParams(normalized), id]
+        );
+        if (!res.rows[0]) throw new Error("Empresa não encontrada.");
+        return mapCompanyRow(res.rows[0]);
+      }
+      const res = await pool.query(
+        `INSERT INTO company_profile (${COMPANY_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+        companyParams(normalized)
       );
-      return normalized;
+      return mapCompanyRow(res.rows[0]);
     } catch (err) {
-      console.error("PG error, falling back to JSON:", err);
+      console.error("PG error saveCompany:", err);
+      throw err instanceof Error ? err : new Error("Erro ao salvar empresa.");
     }
   }
+
   const db = readJsonDb();
-  const jsonProfile: (typeof DEFAULT_JSON_DB)["company_profile"] = {
-    nome_empresa: normalized.nome_empresa,
-    nome_fantasia: normalized.nome_fantasia ?? "",
-    cnpj: normalized.cnpj,
-    inscricao_estadual: normalized.inscricao_estadual ?? "",
-    endereco: normalized.endereco,
-    endereco_logradouro: normalized.endereco_logradouro ?? "",
-    endereco_numero: normalized.endereco_numero ?? "",
-    endereco_complemento: normalized.endereco_complemento ?? "",
-    endereco_bairro: normalized.endereco_bairro ?? "",
-    endereco_cidade: normalized.endereco_cidade ?? "",
-    endereco_estado: normalized.endereco_estado ?? "",
-    telefone: normalized.telefone,
-    email: normalized.email ?? "",
-    cep: normalized.cep ?? "",
-    logo_base64: normalized.logo_base64 ?? "",
-  };
-  db.company_profile = jsonProfile;
+  const list = jsonCompaniesList(db);
+  if (id) {
+    const idx = list.findIndex((c) => c.id === id);
+    if (idx < 0) throw new Error("Empresa não encontrada.");
+    list[idx] = { ...normalized, id };
+  } else {
+    const nextId = list.length > 0 ? Math.max(...list.map((c) => c.id || 0)) + 1 : 1;
+    list.push({ ...normalized, id: nextId });
+  }
+  writeJsonCompanies(db, list);
   writeJsonDb(db);
-  return normalized;
+  return id ? list.find((c) => c.id === id)! : list[list.length - 1];
+}
+
+export async function deleteCompanyProfile(id: number): Promise<boolean> {
+  const list = await getCompanies();
+  if (list.length <= 1) {
+    throw new Error("Não é possível excluir a única empresa cadastrada.");
+  }
+
+  if (isPostgresActive && pool) {
+    const used = await pool.query("SELECT 1 FROM receipts WHERE company_id = $1 LIMIT 1", [id]);
+    if (used.rows.length > 0) {
+      throw new Error("Esta empresa possui espelhos emitidos e não pode ser excluída.");
+    }
+    const res = await pool.query("DELETE FROM company_profile WHERE id = $1", [id]);
+    return (res.rowCount ?? 0) > 0;
+  }
+
+  const db = readJsonDb();
+  const next = jsonCompaniesList(db).filter((c) => c.id !== id);
+  if (next.length === list.length) return false;
+  writeJsonCompanies(db, next);
+  writeJsonDb(db);
+  return true;
 }
 
 // 2. Senders Catalogs
@@ -1232,8 +1280,13 @@ function toDbNumber(val: unknown, precision: number, scale: number): number {
 }
 
 function normalizeReceiptForSave(receipt: Receipt): Receipt {
+  const companyId =
+    receipt.company_id != null && Number.isFinite(Number(receipt.company_id))
+      ? Number(receipt.company_id)
+      : 1;
   return {
     ...receipt,
+    company_id: companyId,
     mercadoria_valor: toDbNumber(receipt.mercadoria_valor, 15, 2),
     mercadoria_quantidade: toDbNumber(receipt.mercadoria_quantidade, 15, 2),
     mercadoria_peso: toDbNumber(receipt.mercadoria_peso, 15, 2),
@@ -1332,6 +1385,7 @@ const RECEIPT_ROW_PARAMS = (receipt: Receipt) => [
   receipt.veiculo_estado,
   receipt.fatura_nome || "",
   receipt.agente_nome || "",
+  receipt.company_id ?? 1,
 ];
 
 function mapPgReceiptRow(saved: Record<string, unknown>): Receipt {
@@ -1363,7 +1417,7 @@ export async function createReceipt(receipt: Receipt): Promise<Receipt> {
           mercadoria_natureza, mercadoria_documento_fiscal, mercadoria_nota_fiscal, mercadoria_valor, mercadoria_quantidade, mercadoria_peso, mercadoria_unidade,
           valor_seguro, valor_icms, valor_outros, valor_total_frete, observacoes,
           motorista_nome, motorista_cpf, motorista_telefone, veiculo_placa, veiculo_cidade, veiculo_estado,
-          fatura_nome, agente_nome
+          fatura_nome, agente_nome, company_id
         ) VALUES (
           $1, $2, $3, $4, $5,
           $6, $7, $8, $9, $10, $11,
@@ -1371,7 +1425,7 @@ export async function createReceipt(receipt: Receipt): Promise<Receipt> {
           $18, $19, $20, $21, $22, $23, $24,
           $25, $26, $27, $28, $29,
           $30, $31, $32, $33, $34, $35,
-          $36, $37
+          $36, $37, $38
         )
         ON CONFLICT (numero_recibo) DO UPDATE SET
           data_recibo = EXCLUDED.data_recibo,
@@ -1409,7 +1463,8 @@ export async function createReceipt(receipt: Receipt): Promise<Receipt> {
           veiculo_cidade = EXCLUDED.veiculo_cidade,
           veiculo_estado = EXCLUDED.veiculo_estado,
           fatura_nome = EXCLUDED.fatura_nome,
-          agente_nome = EXCLUDED.agente_nome
+          agente_nome = EXCLUDED.agente_nome,
+          company_id = EXCLUDED.company_id
         RETURNING *
       `, RECEIPT_ROW_PARAMS(receipt));
       return mapPgReceiptRow(res.rows[0]);
@@ -1491,8 +1546,9 @@ export async function updateReceipt(id: number, receipt: Receipt): Promise<Recei
           veiculo_cidade = $34,
           veiculo_estado = $35,
           fatura_nome = $36,
-          agente_nome = $37
-        WHERE id = $38
+          agente_nome = $37,
+          company_id = $38
+        WHERE id = $39
         RETURNING *
       `,
         [...RECEIPT_ROW_PARAMS(receipt), id]
