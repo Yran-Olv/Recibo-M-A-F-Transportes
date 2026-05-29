@@ -587,7 +587,7 @@ export function ReceiptOrderModal({
         </div>
 
         {/* Conteúdo do passo */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 min-w-0">
           {isBlank && step < 5 && (
             <div className="text-center py-12 space-y-4">
               <p className="text-slate-600 text-sm max-w-sm mx-auto">
@@ -882,13 +882,17 @@ export function ReceiptOrderModal({
                 onQuickAdd={quickAddVehicle}
               />
               {transporte.motorista.trim() ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4 text-sm">
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <div className="sm:col-span-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4 space-y-4 text-sm min-w-0 overflow-hidden">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+                    <div className="sm:col-span-2 min-w-0">
                       <p className={labelClass}>Quem paga a fatura no espelho?</p>
-                      <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                      <div
+                        className="grid grid-cols-1 gap-2 mt-1 min-w-0 w-full"
+                        role="radiogroup"
+                        aria-label="Quem paga a fatura no espelho"
+                      >
                         <label
-                          className={`flex-1 flex items-start gap-2 p-3 rounded-xl border-2 cursor-pointer transition ${
+                          className={`w-full min-w-0 flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${
                             faturaParte === "remetente"
                               ? "border-emerald-500 bg-emerald-50/80"
                               : "border-slate-200 hover:border-slate-300"
@@ -897,19 +901,21 @@ export function ReceiptOrderModal({
                           <input
                             type="radio"
                             name="fatura-parte"
-                            className="mt-0.5"
+                            className="mt-1 shrink-0"
                             checked={faturaParte === "remetente"}
                             onChange={() => setFaturaParte("remetente")}
                           />
-                          <span className="min-w-0">
-                            <span className="block text-xs font-bold text-slate-600 uppercase">Remetente</span>
-                            <span className="block text-sm font-semibold text-slate-900 truncate">
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-bold text-slate-600 uppercase tracking-wide">
+                              Remetente
+                            </span>
+                            <span className="block text-sm font-semibold text-slate-900 break-words leading-snug mt-0.5">
                               {remetente.nome.trim() || "— preencha no passo 1"}
                             </span>
                           </span>
                         </label>
                         <label
-                          className={`flex-1 flex items-start gap-2 p-3 rounded-xl border-2 cursor-pointer transition ${
+                          className={`w-full min-w-0 flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${
                             faturaParte === "destinatario"
                               ? "border-emerald-500 bg-emerald-50/80"
                               : "border-slate-200 hover:border-slate-300"
@@ -918,21 +924,23 @@ export function ReceiptOrderModal({
                           <input
                             type="radio"
                             name="fatura-parte"
-                            className="mt-0.5"
+                            className="mt-1 shrink-0"
                             checked={faturaParte === "destinatario"}
                             onChange={() => setFaturaParte("destinatario")}
                           />
-                          <span className="min-w-0">
-                            <span className="block text-xs font-bold text-slate-600 uppercase">Destinatário</span>
-                            <span className="block text-sm font-semibold text-slate-900 truncate">
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-bold text-slate-600 uppercase tracking-wide">
+                              Destinatário
+                            </span>
+                            <span className="block text-sm font-semibold text-slate-900 break-words leading-snug mt-0.5">
                               {destinatario.nome.trim() || "— preencha no passo 2"}
                             </span>
                           </span>
                         </label>
                       </div>
-                      <p className="text-xs text-slate-500 mt-2">
+                      <p className="text-xs text-slate-500 mt-2 break-words leading-relaxed">
                         No espelho impresso, o campo <strong>Fatura</strong> mostrará:{" "}
-                        <strong>{transporte.fatura || "—"}</strong>
+                        <strong className="text-slate-700">{transporte.fatura || "—"}</strong>
                       </p>
                     </div>
                     <div>
