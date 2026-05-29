@@ -335,6 +335,33 @@ postgres_can_connect() {
     -d "${PGDATABASE:-maf_recibos}" -c "SELECT 1" &>/dev/null
 }
 
+postgres_fix_ownership() {
+  local db_name="$1"
+  local db_user="$2"
+  log "Ajustando dono das tabelas para ${db_user}..."
+  run_as_postgres psql -d "$db_name" -v ON_ERROR_STOP=1 <<SQL
+ALTER DATABASE ${db_name} OWNER TO ${db_user};
+ALTER SCHEMA public OWNER TO ${db_user};
+GRANT ALL ON SCHEMA public TO ${db_user};
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${db_user};
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${db_user};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${db_user};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${db_user};
+DO \$\$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+    EXECUTE format('ALTER TABLE public.%I OWNER TO ${db_user}', r.tablename);
+  END LOOP;
+  FOR r IN SELECT sequencename FROM pg_sequences WHERE schemaname = 'public' LOOP
+    EXECUTE format('ALTER SEQUENCE public.%I OWNER TO ${db_user}', r.sequencename);
+  END LOOP;
+END
+\$\$;
+SQL
+  ok "Permissões PostgreSQL (${db_user} é dono das tabelas)"
+}
+
 setup_postgres() {
   load_env
   local db_name="${PGDATABASE:-maf_recibos}"
@@ -342,6 +369,7 @@ setup_postgres() {
   local db_pass="${PGPASSWORD:-}"
 
   if postgres_can_connect "$db_pass"; then
+    postgres_fix_ownership "$db_name" "$db_user"
     ok "PostgreSQL já configurado"
     return 0
   fi
@@ -357,7 +385,7 @@ BEGIN
   END IF;
 END
 \$\$;
-SELECT 'CREATE DATABASE ${db_name} OWNER ${db_user}'
+SELECT 'CREATE DATABASE ${db_name} OWNER TO ${db_user}'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${db_name}')\gexec
 GRANT ALL PRIVILEGES ON DATABASE ${db_name} TO ${db_user};
 SQL
@@ -368,8 +396,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${db_user};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${db_user};
 SQL
 
-  [[ -f "${ROOT}/db/schema.sql" ]] && \
-    run_as_postgres psql -d "$db_name" -f "${ROOT}/db/schema.sql" 2>/dev/null || true
+  # Tabelas criadas por init-database.ts (como maf_user), não por schema.sql como postgres
+  postgres_fix_ownership "$db_name" "$db_user"
 
   postgres_can_connect "$db_pass" || die "Falha ao conectar no PostgreSQL após setup"
   ok "PostgreSQL pronto"
@@ -381,7 +409,8 @@ init_tables() {
   npm ci
   # PostgreSQL no host Linux — não usar host.docker.internal aqui
   PGHOST=127.0.0.1 npx tsx scripts/init-database.ts
-  ok "Banco de dados inicializado"
+  rm -f "${ROOT}/db.json"
+  ok "Banco de dados inicializado (PostgreSQL)"
 }
 
 # =============================================================================

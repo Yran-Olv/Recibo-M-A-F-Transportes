@@ -1,5 +1,5 @@
--- SCHEMA PARA POSTGRESQL — Sistema M.A.F Espelho de Frete
--- Uso: npm run db:init   ou   psql -U maf_user -d maf_recibos -f db/schema.sql
+-- Referência do schema. Em produção use: sudo ./install.sh  ou  npm run db:init
+-- (tabelas criadas como maf_user — não rode este arquivo como usuário postgres)
 
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
