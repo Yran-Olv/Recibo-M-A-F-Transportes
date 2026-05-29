@@ -1,9 +1,8 @@
-import { parseBrDecimal } from "./brDecimal";
+import { parseBrDecimalFromDatabase } from "./brDecimal";
 
 function toNumber(val: unknown): number {
   if (val === undefined || val === null || val === "") return NaN;
-  if (typeof val === "number") return val;
-  return parseBrDecimal(String(val));
+  return parseBrDecimalFromDatabase(val as string | number);
 }
 
 /** Formato R$30.960,00 (sem espaço após R$), como no espelho M.A.F */

@@ -17,7 +17,11 @@ import { inputClass, labelClass } from "../styles/forms";
 import { CnpjLookupInput } from "./CnpjLookupInput";
 import type { CnpjLookupResult } from "../types/cnpj";
 import { BrDecimalInput } from "./BrDecimalInput";
-import { formatBrDecimal, formatBrDecimalFromUnknown, parseBrDecimal } from "../utils/brDecimal";
+import {
+  formatBrDecimal,
+  formatBrDecimalFromUnknown,
+  parseBrDecimalFromUser,
+} from "../utils/brDecimal";
 import {
   formatCpf,
   formatCpfOrCnpj,
@@ -197,9 +201,9 @@ export function ReceiptOrderModal({
   }, [open, initialData]);
 
   useEffect(() => {
-    const s = parseBrDecimal(valores.seguro);
-    const i = parseBrDecimal(valores.icms);
-    const o = parseBrDecimal(valores.outros);
+    const s = parseBrDecimalFromUser(valores.seguro);
+    const i = parseBrDecimalFromUser(valores.icms);
+    const o = parseBrDecimalFromUser(valores.outros);
     setValores((v) => ({ ...v, total: formatBrDecimal(s + i + o, 2) }));
   }, [valores.seguro, valores.icms, valores.outros]);
 
@@ -222,14 +226,14 @@ export function ReceiptOrderModal({
     mercadoria_natureza: mercadoria.natureza,
     mercadoria_documento_fiscal: mercadoria.docFiscal,
     mercadoria_nota_fiscal: mercadoria.notaFiscal,
-    mercadoria_valor: parseBrDecimal(mercadoria.valor),
-    mercadoria_quantidade: parseBrDecimal(mercadoria.qtd),
-    mercadoria_peso: parseBrDecimal(mercadoria.peso),
+    mercadoria_valor: parseBrDecimalFromUser(mercadoria.valor),
+    mercadoria_quantidade: parseBrDecimalFromUser(mercadoria.qtd),
+    mercadoria_peso: parseBrDecimalFromUser(mercadoria.peso),
     mercadoria_unidade: mercadoria.unidade,
-    valor_seguro: parseBrDecimal(valores.seguro),
-    valor_icms: parseBrDecimal(valores.icms),
-    valor_outros: parseBrDecimal(valores.outros),
-    valor_total_frete: parseBrDecimal(valores.total),
+    valor_seguro: parseBrDecimalFromUser(valores.seguro),
+    valor_icms: parseBrDecimalFromUser(valores.icms),
+    valor_outros: parseBrDecimalFromUser(valores.outros),
+    valor_total_frete: parseBrDecimalFromUser(valores.total),
     observacoes: obs,
     motorista_nome: transporte.motorista,
     motorista_cpf: transporte.cpf,

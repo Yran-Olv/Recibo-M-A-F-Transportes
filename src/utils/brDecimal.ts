@@ -1,29 +1,47 @@
-/** Converte texto BR, número ou formato do PostgreSQL (18500.000) para número. */
-export function parseBrDecimal(input: string | number | null | undefined): number {
+/** Digitação/formulário: ponto = milhar, vírgula = decimal (18.500,00 → 18500). */
+export function parseBrDecimalFromUser(input: string | number | null | undefined): number {
   if (typeof input === "number" && Number.isFinite(input)) return input;
   if (input === undefined || input === null) return 0;
 
   const raw = String(input).trim();
   if (!raw) return 0;
 
-  // Formato brasileiro: vírgula como decimal (18.500,00)
+  const normalized = raw.replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Valores vindos do PostgreSQL/API: um ponto = decimal (774.000 → 774; 30960.00 → 30960). */
+export function parseBrDecimalFromDatabase(input: string | number | null | undefined): number {
+  if (typeof input === "number" && Number.isFinite(input)) return input;
+  if (input === undefined || input === null) return 0;
+
+  const raw = String(input).trim();
+  if (!raw) return 0;
+
   if (raw.includes(",")) {
-    const normalized = raw.replace(/\./g, "").replace(",", ".");
-    const n = parseFloat(normalized);
-    return Number.isFinite(n) ? n : 0;
+    return parseBrDecimalFromUser(raw);
   }
 
-  // Formato PostgreSQL / US: um ponto decimal (18500.000 ou 3096000.00)
-  const dotMatches = raw.match(/\./g);
-  if (dotMatches?.length === 1) {
+  const dotCount = (raw.match(/\./g) || []).length;
+  if (dotCount <= 1) {
     const n = parseFloat(raw);
     return Number.isFinite(n) ? n : 0;
   }
 
-  // Só separador de milhar com ponto ou inteiro (3.096.000)
-  const normalized = raw.replace(/\./g, "");
-  const n = parseFloat(normalized);
-  return Number.isFinite(n) ? n : 0;
+  return parseBrDecimalFromUser(raw);
+}
+
+/**
+ * @param source `user` = campos digitados; `database` = leitura do banco/impressão.
+ */
+export function parseBrDecimal(
+  input: string | number | null | undefined,
+  source: "user" | "database" = "user"
+): number {
+  return source === "database"
+    ? parseBrDecimalFromDatabase(input)
+    : parseBrDecimalFromUser(input);
 }
 
 /** Limita valor ao que cabe em DECIMAL(precision, scale) do PostgreSQL. */
@@ -48,7 +66,7 @@ export function formatBrDecimal(n: number, decimals: number): string {
 /** Formata valor vindo do banco/API ou string. */
 export function formatBrDecimalFromUnknown(val: unknown, decimals: number): string {
   if (val === undefined || val === null || val === "") return "";
-  const n = parseBrDecimal(val as string | number);
+  const n = parseBrDecimalFromDatabase(val as string | number);
   if (!Number.isFinite(n)) return "";
   return formatBrDecimal(n, decimals);
 }
@@ -94,19 +112,19 @@ export function finalizeBrDecimal(value: string, decimals: number): string {
 
   const commaIdx = trimmed.indexOf(",");
   if (commaIdx < 0) {
-    return formatBrDecimal(parseBrDecimal(trimmed), decimals);
+    return formatBrDecimal(parseBrDecimalFromUser(trimmed), decimals);
   }
 
   const decPart = trimmed.slice(commaIdx + 1).replace(/\D/g, "");
   if (decPart.length === 0) {
     const intOnly = trimmed.slice(0, commaIdx);
-    return formatBrDecimal(parseBrDecimal(intOnly || "0"), decimals);
+    return formatBrDecimal(parseBrDecimalFromUser(intOnly || "0"), decimals);
   }
 
   if (decPart.length >= decimals) {
     const normalized = `${trimmed.slice(0, commaIdx)},${decPart.slice(0, decimals)}`;
-    return formatBrDecimal(parseBrDecimal(normalized), decimals);
+    return formatBrDecimal(parseBrDecimalFromUser(normalized), decimals);
   }
 
-  return formatBrDecimal(parseBrDecimal(trimmed), decimals);
+  return formatBrDecimal(parseBrDecimalFromUser(trimmed), decimals);
 }

@@ -8,7 +8,11 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import type { AuthUser, SessionStore } from "./auth.ts";
 import { hashToken } from "./auth.ts";
-import { clampPgDecimal, parseBrDecimal } from "../utils/brDecimal.ts";
+import {
+  clampPgDecimal,
+  parseBrDecimalFromDatabase,
+  parseBrDecimalFromUser,
+} from "../utils/brDecimal.ts";
 import { normalizeCompanyProfile } from "../utils/companyAddress.ts";
 
 const { Pool } = pg;
@@ -1218,7 +1222,13 @@ export async function getNextReceiptNumber(): Promise<string> {
 }
 
 function toDbNumber(val: unknown, precision: number, scale: number): number {
-  return clampPgDecimal(parseBrDecimal(val as string | number), precision, scale);
+  const n =
+    typeof val === "number"
+      ? val
+      : typeof val === "string"
+        ? parseBrDecimalFromUser(val)
+        : parseBrDecimalFromDatabase(val as string | number);
+  return clampPgDecimal(n, precision, scale);
 }
 
 function normalizeReceiptForSave(receipt: Receipt): Receipt {
