@@ -18,9 +18,9 @@ A app escuta só em **localhost** (padrão porta **3010**). O Nginx faz o proxy 
 chmod +x scripts/deploy.sh
 
 ./scripts/deploy.sh help          # ajuda
-./scripts/deploy.sh postgres      # criar banco (precisa DB_PASS)
+./scripts/deploy.sh               # .env + banco + tabelas + Docker (padrão)
+./scripts/deploy.sh postgres      # só banco (se já tiver .env)
 ./scripts/deploy.sh init-db       # só tabelas
-./scripts/deploy.sh               # deploy completo Docker
 ./scripts/deploy.sh systemd       # deploy sem Docker
 ./scripts/deploy.sh check-port    # testar porta 3010
 ./scripts/deploy.sh check-port 3011
@@ -32,44 +32,30 @@ Ou via npm: `npm run deploy`
 
 ## Passo a passo no servidor
 
-### 1. Configurar `.env`
+### Deploy automático (recomendado)
+
+Na primeira vez o script **cria o `.env`**, gera `SESSION_SECRET`, pergunta a senha do PostgreSQL e do admin, **cria usuário/banco**, **cria tabelas** e sobe o Docker:
 
 ```bash
-cp .env.production.example .env
-nano .env
-```
-
-Obrigatório: `SESSION_SECRET` (`openssl rand -hex 32`), `PGPASSWORD`, `ADMIN_INITIAL_PASSWORD`, `MAF_HOST_PORT=3010`.
-
-Docker:
-
-```env
-PGHOST=host.docker.internal
-HOST=0.0.0.0
-```
-
-Systemd:
-
-```env
-PGHOST=127.0.0.1
-HOST=127.0.0.1
-PORT=3010
-```
-
-### 2. PostgreSQL (primeira vez)
-
-```bash
-DB_PASS='SUA_SENHA_FORTE' ./scripts/deploy.sh postgres
-```
-
-Coloque a mesma senha em `PGPASSWORD` no `.env`.
-
-### 3. Deploy da aplicação
-
-```bash
+git clone … && cd Recibo-M-A-F-Transportes
+chmod +x scripts/deploy.sh
 npm ci
 ./scripts/deploy.sh
 ```
+
+Sem perguntas (CI ou SSH não interativo):
+
+```bash
+DB_PASS='SUA_SENHA_FORTE' ADMIN_INITIAL_PASSWORD='senha_admin' ./scripts/deploy.sh
+```
+
+O `.env` fica no diretório do projeto com `PGPASSWORD` e demais valores já preenchidos.
+
+### Ajustes manuais (opcional)
+
+Se quiser editar antes do deploy: `cp .env.production.example .env && nano .env`
+
+Comandos avulsos: `postgres` (só banco), `init-db` (só tabelas).
 
 ### 4. Nginx + Certbot
 
