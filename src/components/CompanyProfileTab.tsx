@@ -119,13 +119,25 @@ export function CompanyProfileTab({ companies, onCompaniesChange }: CompanyProfi
     reader.readAsDataURL(file);
   };
 
+  const reloadCompanies = async (): Promise<CompanyProfile[]> => {
+    const res = await api("/api/companies");
+    if (!res.ok) throw new Error("Não foi possível recarregar a lista de empresas.");
+    const list = (await res.json()) as CompanyProfile[];
+    onCompaniesChange(list);
+    return list;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setMessage(null);
     try {
-      const payload = isNew ? formData : { ...formData, id: selectedId ?? formData.id };
-      const response = await api("/api/company", {
+      const { id: _omit, ...withoutId } = formData;
+      const payload = isNew
+        ? withoutId
+        : { ...formData, id: selectedId ?? formData.id };
+      const url = isNew ? "/api/companies" : "/api/company";
+      const response = await api(url, {
         method: "POST",
         body: JSON.stringify(payload),
       });
@@ -135,17 +147,17 @@ export function CompanyProfileTab({ companies, onCompaniesChange }: CompanyProfi
       }
       const result = await response.json();
       const saved = result.company as CompanyProfile;
-      onCompaniesChange(
-        isNew
-          ? [...companies, saved].sort((a, b) =>
-              (a.nome_fantasia || a.nome_empresa || "").localeCompare(b.nome_fantasia || b.nome_empresa || "")
-            )
-          : companies.map((c) => (c.id === saved.id ? saved : c))
-      );
-      setSelectedId(saved.id ?? null);
+      const list = await reloadCompanies();
+      const fresh = list.find((c) => c.id === saved.id) ?? saved;
+      setSelectedId(fresh.id ?? null);
       setIsNew(false);
-      setFormData({ ...emptyCompany(), ...saved });
-      setMessage({ type: "success", text: "Empresa salva com sucesso!" });
+      setFormData({ ...emptyCompany(), ...fresh });
+      setMessage({
+        type: "success",
+        text: isNew
+          ? "Nova empresa cadastrada! As demais continuam na lista acima."
+          : "Empresa salva com sucesso!",
+      });
     } catch (err: unknown) {
       setMessage({
         type: "error",
@@ -172,9 +184,8 @@ export function CompanyProfileTab({ companies, onCompaniesChange }: CompanyProfi
         const err = await res.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || "Erro ao excluir.");
       }
-      const next = companies.filter((c) => c.id !== selectedId);
-      onCompaniesChange(next);
-      setSelectedId(next[0]?.id ?? null);
+      const list = await reloadCompanies();
+      setSelectedId(list[0]?.id ?? null);
       setIsNew(false);
       setMessage({ type: "success", text: "Empresa excluída." });
     } catch (err: unknown) {
@@ -208,8 +219,8 @@ export function CompanyProfileTab({ companies, onCompaniesChange }: CompanyProfi
         </button>
       </div>
 
-      {companies.length > 0 && !isNew && (
-        <div className="flex flex-wrap gap-2">
+      {(companies.length > 0 || isNew) && (
+        <div className="flex flex-wrap gap-2 items-center">
           {companies.map((c) => (
             <button
               key={c.id}
@@ -219,7 +230,7 @@ export function CompanyProfileTab({ companies, onCompaniesChange }: CompanyProfi
                 setSelectedId(c.id ?? null);
               }}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium border cursor-pointer transition ${
-                selectedId === c.id
+                !isNew && selectedId === c.id
                   ? "bg-blue-600 text-white border-blue-600"
                   : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
               }`}
@@ -227,6 +238,11 @@ export function CompanyProfileTab({ companies, onCompaniesChange }: CompanyProfi
               {c.nome_fantasia?.trim() || c.nome_empresa || `Empresa ${c.id}`}
             </button>
           ))}
+          {isNew && (
+            <span className="px-3 py-1.5 rounded-lg text-sm font-semibold border-2 border-dashed border-blue-400 text-blue-700 bg-blue-50">
+              + Nova empresa (preencha abaixo)
+            </span>
+          )}
         </div>
       )}
 

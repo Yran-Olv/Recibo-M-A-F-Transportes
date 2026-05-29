@@ -138,7 +138,9 @@ export function AppLayout({
   );
 
   return (
-    <div className={`min-h-screen flex ${isDark ? "bg-slate-950 text-slate-100" : "bg-slate-100 text-slate-900"}`}>
+    <div
+      className={`h-dvh max-h-dvh flex overflow-hidden ${isDark ? "bg-slate-950 text-slate-100" : "bg-slate-100 text-slate-900"}`}
+    >
       {/* Desktop sidebar */}
       <aside
         className={`hidden lg:flex flex-col shrink-0 border-r transition-all duration-200 ${
@@ -173,9 +175,9 @@ export function AppLayout({
         </div>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <header
-          className={`sticky top-0 z-30 border-b px-4 py-3 flex items-center justify-between gap-3 ${
+          className={`shrink-0 z-30 border-b px-4 py-2.5 sm:py-3 flex items-center justify-between gap-3 ${
             isDark ? "bg-slate-900/95 border-slate-800 backdrop-blur" : "bg-white/95 border-slate-200 backdrop-blur"
           }`}
         >
@@ -201,9 +203,11 @@ export function AppLayout({
           </span>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 max-w-6xl w-full mx-auto">{children}</main>
+        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 max-w-6xl w-full mx-auto">
+          {children}
+        </main>
 
-        <footer className="py-3 text-center text-[11px] text-slate-400 border-t border-slate-200/60">
+        <footer className="shrink-0 py-2 sm:py-3 text-center text-[11px] text-slate-400 border-t border-slate-200/60">
           M.A.F Transportes e Seguros de Cargas
         </footer>
       </div>

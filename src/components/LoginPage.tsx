@@ -46,7 +46,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 flex items-center justify-center p-4">
+    <div className="h-dvh max-h-dvh overflow-y-auto overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8 text-center">
           <SiteLogo showText={false} size="hero" className="justify-center mb-6 sm:mb-8" />

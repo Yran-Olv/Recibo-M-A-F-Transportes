@@ -30,6 +30,7 @@ import {
   formatTelefone,
 } from "../utils/cnpj";
 import { AppDialog, type AppDialogVariant } from "./AppDialog";
+import { ModalShell } from "./ModalShell";
 
 const STEPS = [
   { id: 0, title: "Empresa", icon: Building2 },
@@ -514,80 +515,131 @@ export function ReceiptOrderModal({
       message={dialog.message}
       onClose={() => setDialog((d) => ({ ...d, open: false }))}
     />
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50">
-      <div
-        className="bg-white w-full sm:max-w-3xl max-h-[100dvh] sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        role="dialog"
-        aria-modal="true"
-      >
-        {/* Cabeçalho */}
-        <div className="shrink-0 border-b border-slate-200 px-4 sm:px-6 py-4 bg-slate-50">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
-                {isEditing ? "Editar espelho" : "Ordem de frete"}
-              </p>
-              <h2 className="text-lg font-bold text-slate-900">
-                {isEditing
-                  ? `Espelho nº ${numero || initialData?.numero_recibo || "—"}`
-                  : "Novo espelho de frete / viagem"}
+    <ModalShell
+      open={open}
+      maxWidthClassName="max-w-3xl"
+      ariaLabel={isEditing ? "Editar espelho de frete" : "Novo espelho de frete"}
+      header={
+        step === 5 ? (
+          <div className="border-b border-slate-200 px-3 sm:px-5 py-2.5 bg-slate-50 flex items-center justify-between gap-2 min-w-0">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Revisão</p>
+              <h2 className="text-base font-bold text-slate-900 truncate">
+                Espelho nº {numero || initialData?.numero_recibo || "—"}
               </h2>
             </div>
-            <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-slate-200 cursor-pointer">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-slate-200 cursor-pointer shrink-0"
+              aria-label="Fechar"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
+        ) : (
+          <div className="border-b border-slate-200 px-3 sm:px-5 py-2 sm:py-2.5 bg-slate-50 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+                  {isEditing ? "Editar espelho" : "Ordem de frete"}
+                </p>
+                <h2 className="text-base sm:text-lg font-bold text-slate-900 truncate">
+                  {isEditing
+                    ? `Espelho nº ${numero || initialData?.numero_recibo || "—"}`
+                    : "Novo espelho de frete / viagem"}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 rounded-lg hover:bg-slate-200 cursor-pointer shrink-0"
+                aria-label="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-            <div>
-              <label className={labelClass}>Nº espelho</label>
-              <input className={inputClass} value={numero} onChange={(e) => setNumero(e.target.value)} />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
+              <div>
+                <label className={labelClass}>Nº espelho</label>
+                <input className={inputClass} value={numero} onChange={(e) => setNumero(e.target.value)} />
+              </div>
+              <div>
+                <label className={labelClass}>Data</label>
+                <input type="date" className={inputClass} value={data} onChange={(e) => setData(e.target.value)} />
+              </div>
+              <div className="col-span-2 flex items-end">
+                <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer pb-1.5">
+                  <input type="checkbox" checked={isBlank} onChange={(e) => setIsBlank(e.target.checked)} />
+                  <span className="leading-tight">Emitir em branco</span>
+                </label>
+              </div>
             </div>
-            <div>
-              <label className={labelClass}>Data</label>
-              <input type="date" className={inputClass} value={data} onChange={(e) => setData(e.target.value)} />
-            </div>
-            <div className="col-span-2 flex items-end">
-              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer pb-2.5">
-                <input type="checkbox" checked={isBlank} onChange={(e) => setIsBlank(e.target.checked)} />
-                Emitir em branco (preencher à mão)
-              </label>
+
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 mt-2">
+              {STEPS.map((s) => {
+                const Icon = s.icon;
+                const active = step === s.id;
+                const done = step > s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    title={`Ir para: ${s.title}`}
+                    onClick={() => goToStep(s.id)}
+                    className={`flex items-center justify-center gap-0.5 px-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-medium leading-tight text-center cursor-pointer transition ${
+                      active
+                        ? "bg-emerald-600 text-white"
+                        : done
+                          ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                          : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                    }`}
+                  >
+                    <Icon className="w-3 h-3 shrink-0 hidden sm:block" />
+                    <span className="min-w-0">{s.title}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
+        )
+      }
+      footer={
+        <div className="border-t border-slate-200 px-3 sm:px-5 py-2.5 flex justify-between gap-3 bg-white">
+          <button
+            type="button"
+            onClick={step === 1 ? onClose : back}
+            className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-1"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            {step === 1 ? "Cancelar" : "Voltar"}
+          </button>
 
-          {/* Stepper — clique no nome ou use Próximo / Voltar */}
-          <div className="flex gap-1 mt-4 overflow-x-auto pb-1">
-            {STEPS.map((s) => {
-              const Icon = s.icon;
-              const active = step === s.id;
-              const done = step > s.id;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  title={`Ir para: ${s.title}`}
-                  onClick={() => goToStep(s.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap cursor-pointer transition hover:ring-2 hover:ring-emerald-400/50 ${
-                    active
-                      ? "bg-emerald-600 text-white ring-2 ring-emerald-500/30"
-                      : done
-                        ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                        : "bg-slate-200 text-slate-600 hover:bg-slate-300"
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
-                  {s.title}
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-[10px] text-slate-500 mt-1.5">
-            Clique em qualquer etapa acima ou use os botões Voltar e Próximo.
-          </p>
+          {step < 5 ? (
+            <button
+              type="button"
+              onClick={next}
+              className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold cursor-pointer flex items-center gap-1"
+            >
+              Próximo
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={emit}
+              className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold cursor-pointer flex items-center gap-2 disabled:opacity-60"
+            >
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {isEditing ? "Salvar alterações" : "Emitir espelho"}
+            </button>
+          )}
         </div>
-
-        {/* Conteúdo do passo */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 min-w-0">
+      }
+    >
+        <div className="p-3 sm:p-5 min-w-0 min-h-full flex flex-col">
           {isBlank && step < 5 && (
             <div className="text-center py-12 space-y-4">
               <p className="text-slate-600 text-sm max-w-sm mx-auto">
@@ -659,6 +711,7 @@ export function ReceiptOrderModal({
                 }}
                 allowQuickAdd
                 onQuickAdd={quickAddSender}
+                listClassName="max-h-28 sm:max-h-36"
               />
               <details className="text-sm">
                 <summary className="cursor-pointer text-emerald-700 font-medium">Editar dados do remetente</summary>
@@ -695,6 +748,7 @@ export function ReceiptOrderModal({
                 }}
                 allowQuickAdd
                 onQuickAdd={quickAddRecipient}
+                listClassName="max-h-28 sm:max-h-36"
               />
               <details className="text-sm">
                 <summary className="cursor-pointer text-emerald-700 font-medium">Editar dados do destinatário</summary>
@@ -802,7 +856,7 @@ export function ReceiptOrderModal({
           )}
 
           {step === 4 && !isBlank && (
-            <div className="space-y-5">
+            <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
                 <Truck className="w-5 h-5 text-emerald-600" />
                 <div>
@@ -858,6 +912,7 @@ export function ReceiptOrderModal({
                 }}
                 allowQuickAdd
                 onQuickAdd={quickAddDriver}
+                listClassName="max-h-28 sm:max-h-36"
               />
               <EntitySearchPicker
                 label="Veículo (placa)"
@@ -880,6 +935,7 @@ export function ReceiptOrderModal({
                 }}
                 allowQuickAdd
                 onQuickAdd={quickAddVehicle}
+                listClassName="max-h-28 sm:max-h-36"
               />
               {transporte.motorista.trim() ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4 space-y-4 text-sm min-w-0 overflow-hidden">
@@ -892,7 +948,7 @@ export function ReceiptOrderModal({
                         aria-label="Quem paga a fatura no espelho"
                       >
                         <label
-                          className={`w-full min-w-0 flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${
+                          className={`w-full min-w-0 flex items-start gap-2.5 p-2.5 sm:p-3 rounded-xl border-2 cursor-pointer transition ${
                             faturaParte === "remetente"
                               ? "border-emerald-500 bg-emerald-50/80"
                               : "border-slate-200 hover:border-slate-300"
@@ -915,7 +971,7 @@ export function ReceiptOrderModal({
                           </span>
                         </label>
                         <label
-                          className={`w-full min-w-0 flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${
+                          className={`w-full min-w-0 flex items-start gap-2.5 p-2.5 sm:p-3 rounded-xl border-2 cursor-pointer transition ${
                             faturaParte === "destinatario"
                               ? "border-emerald-500 bg-emerald-50/80"
                               : "border-slate-200 hover:border-slate-300"
@@ -990,49 +1046,17 @@ export function ReceiptOrderModal({
           )}
 
           {step === 5 && (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-600">Confira o documento antes de emitir.</p>
-              <div className="overflow-x-auto border rounded-xl p-2 bg-slate-100 max-h-[50vh]">
-                <ReceiptPrintout receipt={draft} company={emitCompany!} isBlank={isBlank} />
+            <div className="flex flex-col flex-1 min-h-0 gap-2">
+              <p className="text-sm text-slate-600 shrink-0">Confira o documento antes de emitir.</p>
+              <div className="flex-1 min-h-0 overflow-auto overscroll-contain border rounded-xl p-2 bg-slate-100 flex justify-center">
+                <div className="origin-top scale-[0.62] sm:scale-[0.72] md:scale-[0.82] lg:scale-95 xl:scale-100 w-full max-w-[182mm]">
+                  <ReceiptPrintout receipt={draft} company={emitCompany!} isBlank={isBlank} />
+                </div>
               </div>
             </div>
           )}
         </div>
-
-        {/* Rodapé */}
-        <div className="shrink-0 border-t border-slate-200 px-4 sm:px-6 py-4 flex justify-between gap-3 bg-white">
-          <button
-            type="button"
-            onClick={step === 1 ? onClose : back}
-            className="px-4 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer flex items-center gap-1"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            {step === 1 ? "Cancelar" : "Voltar"}
-          </button>
-
-          {step < 5 ? (
-            <button
-              type="button"
-              onClick={next}
-              className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold cursor-pointer flex items-center gap-1"
-            >
-              Próximo
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={emit}
-              className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold cursor-pointer flex items-center gap-2 disabled:opacity-60"
-            >
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              {isEditing ? "Salvar alterações" : "Emitir espelho"}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    </ModalShell>
     </>
   );
 }

@@ -30,6 +30,8 @@ interface EntitySearchPickerProps {
   emptyHint?: string;
   allowQuickAdd?: boolean;
   onQuickAdd?: (data: SearchableItem) => Promise<void>;
+  /** Altura máxima da lista de resultados (ex.: em modal use max-h-32). */
+  listClassName?: string;
 }
 
 function primaryLabel(item: SearchableItem, mode: "person" | "vehicle" | "name") {
@@ -59,6 +61,7 @@ export function EntitySearchPicker({
   emptyHint = "Nenhum cadastro encontrado. Cadastre em Cadastros ou adicione abaixo.",
   allowQuickAdd = false,
   onQuickAdd,
+  listClassName = "max-h-48",
 }: EntitySearchPickerProps) {
   const [query, setQuery] = useState("");
   const [showQuickAdd, setShowQuickAdd] = useState(false);
@@ -160,7 +163,9 @@ export function EntitySearchPicker({
         />
       </div>
 
-      <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
+      <div
+        className={`${listClassName} overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white divide-y divide-slate-100`}
+      >
         {filtered.length === 0 ? (
           <p className="p-4 text-sm text-slate-500 text-center">{emptyHint}</p>
         ) : (

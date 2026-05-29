@@ -10,6 +10,7 @@ import { AccountTab } from "./components/AccountTab";
 import { AppLayout } from "./components/AppLayout";
 import { api } from "./api";
 import { printReceiptDocument } from "./utils/printDocument";
+import { ModalShell } from "./components/ModalShell";
 import { CheckCircle, Printer, X } from "lucide-react";
 
 const EMPTY_COMPANY: CompanyProfile = {
@@ -142,7 +143,12 @@ export default function App() {
 
   const handleCompaniesChange = (list: CompanyProfile[]) => {
     setCompanies(list);
-    setCompany(list[0] ?? EMPTY_COMPANY);
+    setCompany((prev) => {
+      if (prev.id && list.some((c) => c.id === prev.id)) {
+        return list.find((c) => c.id === prev.id) ?? list[0] ?? EMPTY_COMPANY;
+      }
+      return list[0] ?? EMPTY_COMPANY;
+    });
   };
 
   const handleAddSender = (item: CatalogItem) => {
@@ -273,7 +279,7 @@ export default function App() {
   if (!isAuthenticated) {
     if (isLoading) {
       return (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="h-dvh bg-slate-900 flex items-center justify-center">
           <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
         </div>
       );
@@ -384,49 +390,54 @@ export default function App() {
         )}
       </AppLayout>
 
-      {printPreviewReceipt && (
-        <div className="print-modal-shell fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="print-modal-shell bg-white w-full sm:max-w-4xl sm:rounded-2xl max-h-[100dvh] sm:max-h-[92vh] flex flex-col shadow-2xl">
-            <div className="no-print flex items-center justify-between gap-3 p-4 border-b bg-slate-50 shrink-0">
-              <div>
-                <p className="font-semibold text-slate-900 flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-emerald-600" />
+      <ModalShell
+        open={!!printPreviewReceipt}
+        maxWidthClassName="max-w-4xl"
+        ariaLabel="Visualizar espelho para impressão"
+        header={
+          printPreviewReceipt ? (
+            <div className="no-print flex flex-wrap items-start justify-between gap-2 p-3 sm:p-4 border-b bg-slate-50">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-slate-900 flex items-center gap-2 text-sm sm:text-base">
+                  <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
                   Espelho nº {printPreviewReceipt.numero_recibo}
                 </p>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  A4 — ao imprimir, desative <strong>Cabeçalhos e rodapés</strong> no navegador (remove URL e data).
+                  Ao imprimir, desative <strong>Cabeçalhos e rodapés</strong> no navegador.
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 shrink-0 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => printReceiptDocument("print-document")}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg cursor-pointer flex items-center gap-2"
+                  className="flex-1 sm:flex-none px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg cursor-pointer flex items-center justify-center gap-2"
                 >
                   <Printer className="w-4 h-4" /> Imprimir
                 </button>
                 <button
                   type="button"
                   onClick={() => setPrintPreviewReceipt(null)}
-                  className="p-2 rounded-lg hover:bg-slate-200 cursor-pointer"
+                  className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 cursor-pointer"
+                  aria-label="Fechar"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
-            <div className="print-modal-body overflow-auto p-4 bg-slate-100 flex justify-center sm:p-6">
-              <ReceiptPrintout
-                printRootId="print-document"
-                receipt={printPreviewReceipt}
-                company={
-                  companies.find((c) => c.id === printPreviewReceipt.company_id) ?? company
-                }
-                isBlank={printPreviewReceipt.is_blank}
-              />
-            </div>
+          ) : null
+        }
+      >
+        {printPreviewReceipt ? (
+          <div className="print-modal-body p-3 sm:p-6 bg-slate-100 flex justify-center min-h-0">
+            <ReceiptPrintout
+              printRootId="print-document"
+              receipt={printPreviewReceipt}
+              company={companies.find((c) => c.id === printPreviewReceipt.company_id) ?? company}
+              isBlank={printPreviewReceipt.is_blank}
+            />
           </div>
-        </div>
-      )}
+        ) : null}
+      </ModalShell>
     </>
   );
 }

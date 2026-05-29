@@ -749,13 +749,22 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
   return list[0] ?? normalizeCompanyProfile(DEFAULT_JSON_DB.company_profile);
 }
 
-export async function saveCompanyProfile(profile: CompanyProfile): Promise<CompanyProfile> {
+export async function saveCompanyProfile(
+  profile: CompanyProfile,
+  options?: { create?: boolean }
+): Promise<CompanyProfile> {
   const normalized = normalizeCompanyProfile(profile);
   const id = profile.id;
+  const isUpdate =
+    options?.create === true
+      ? false
+      : options?.create === false
+        ? true
+        : id != null && Number(id) > 0;
 
   if (isPostgresActive && pool) {
     try {
-      if (id) {
+      if (isUpdate && id) {
         const res = await pool.query(
           `UPDATE company_profile SET
             nome_empresa=$1, nome_fantasia=$2, cnpj=$3, inscricao_estadual=$4, endereco=$5,
@@ -780,17 +789,20 @@ export async function saveCompanyProfile(profile: CompanyProfile): Promise<Compa
 
   const db = readJsonDb();
   const list = jsonCompaniesList(db);
-  if (id) {
+  if (isUpdate && id) {
     const idx = list.findIndex((c) => c.id === id);
     if (idx < 0) throw new Error("Empresa não encontrada.");
     list[idx] = { ...normalized, id };
-  } else {
-    const nextId = list.length > 0 ? Math.max(...list.map((c) => c.id || 0)) + 1 : 1;
-    list.push({ ...normalized, id: nextId });
+    writeJsonCompanies(db, list);
+    writeJsonDb(db);
+    return list[idx];
   }
+  const nextId = list.length > 0 ? Math.max(...list.map((c) => c.id || 0)) + 1 : 1;
+  const created = { ...normalized, id: nextId };
+  list.push(created);
   writeJsonCompanies(db, list);
   writeJsonDb(db);
-  return id ? list.find((c) => c.id === id)! : list[list.length - 1];
+  return created;
 }
 
 export async function deleteCompanyProfile(id: number): Promise<boolean> {

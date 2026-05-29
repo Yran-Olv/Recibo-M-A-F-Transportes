@@ -150,16 +150,20 @@ async function startServer() {
 
   app.post("/api/company", async (req, res) => {
     try {
-      const saved = await saveCompanyProfile(req.body);
+      const body = req.body as { id?: number };
+      const saved = await saveCompanyProfile(req.body, {
+        create: body.id == null || Number(body.id) <= 0,
+      });
       res.json({ success: true, company: saved });
     } catch (err: unknown) {
       res.status(500).json({ error: err instanceof Error ? err.message : "Erro" });
     }
   });
 
+  /** Sempre cadastra uma nova empresa (não sobrescreve a existente). */
   app.post("/api/companies", async (req, res) => {
     try {
-      const saved = await saveCompanyProfile(req.body);
+      const saved = await saveCompanyProfile(req.body, { create: true });
       res.json({ success: true, company: saved });
     } catch (err: unknown) {
       res.status(500).json({ error: err instanceof Error ? err.message : "Erro" });
