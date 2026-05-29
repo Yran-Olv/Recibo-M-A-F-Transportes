@@ -19,6 +19,7 @@
 #   SKIP_NGINX=1        — não configura Nginx
 #   sudo ./install.sh --reconfigure   (perguntas de novo; Enter = manter .env)
 #   sudo ./install.sh --app-only        (só Docker + Nginx + Certbot; banco já OK)
+#   sudo ./update.sh                    (atualizar: git + migrações + Docker)
 #   Não use: sudo -t ./install.sh --reconfigure (sudo trata --reconfigure como opção dele)
 # =============================================================================
 set -euo pipefail

@@ -55,6 +55,13 @@ sudo DOMAIN=recibos.seudominio.com.br \
 
 Guia: **[docs/DEPLOY-PRODUCAO.md](docs/DEPLOY-PRODUCAO.md)**
 
+**Atualizar após mudanças no GitHub:**
+
+```bash
+cd /var/www/maf-recibos
+sudo ./update.sh
+```
+
 ## Campos do espelho
 
 | Seção | Campos |

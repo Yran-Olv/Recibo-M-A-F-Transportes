@@ -93,13 +93,30 @@ sudo ./install.sh --app-only
 
 Equivale a `docker compose … up -d --build`, `curl` no `/api/health`, Nginx e Certbot.
 
-## Atualizar versão
+## Atualizar versão (dia a dia)
+
+**Script de atualização** — pull, migrações, Docker, Nginx:
 
 ```bash
 cd /var/www/maf-recibos
-sudo git pull
-sudo ./install.sh
+sudo git pull          # traz o update.sh se ainda não tiver
+sudo chmod +x update.sh
+sudo ./update.sh
 ```
+
+Ou: `npm run update:prod`
+
+O `update.sh` faz:
+
+1. `git pull` do GitHub
+2. Novas chaves do `.env.production.example` → `.env` (só as que faltam)
+3. `npm ci` + migrações (`init-database.ts` / `migrateSchema`)
+4. `docker compose … up -d --build` + health check
+5. Recarrega Nginx na porta/domínio do `.env`
+
+Variáveis: `SKIP_GIT=1`, `SKIP_MIGRATE=1`, `SKIP_NGINX=1`, `MAF_BRANCH=main`
+
+Reinstalação completa (primeira vez ou quebrado): `sudo ./install.sh`
 
 ---
 
