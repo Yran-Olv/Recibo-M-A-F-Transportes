@@ -3,6 +3,7 @@
 # M.A.F Espelho de Frete — script único de deploy em produção
 # =============================================================================
 #
+#   ./install.sh                     # preferido em produção (/var/www/maf-recibos)
 #   ./scripts/deploy.sh              # cria .env, banco, tabelas e sobe Docker
 #   ./scripts/deploy.sh systemd
 #   ./scripts/deploy.sh postgres | init-db | check-port
@@ -14,6 +15,16 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+
+if [[ ! -f package-lock.json ]] || [[ ! -f package.json ]]; then
+  echo "✗ Pasta do projeto incompleta (falta package.json / package-lock.json)." >&2
+  echo "  Em produção, na primeira vez no servidor:" >&2
+  echo "    cd /var/www" >&2
+  echo "    sudo curl -fsSL https://raw.githubusercontent.com/Yran-Olv/Recibo-M-A-F-Transportes/main/scripts/bootstrap-production.sh -o bootstrap-maf.sh" >&2
+  echo "    sudo DB_PASS='senha' ADMIN_INITIAL_PASSWORD='senha' bash bootstrap-maf.sh" >&2
+  echo "  Ou: git clone https://github.com/Yran-Olv/Recibo-M-A-F-Transportes.git /var/www/maf-recibos && cd /var/www/maf-recibos && sudo ./install.sh" >&2
+  exit 1
+fi
 
 CMD="${1:-deploy}"
 ARG2="${2:-}"

@@ -1,103 +1,121 @@
 # Deploy em produção — M.A.F Espelho de Frete
 
-Tudo passa por **um único script**: `scripts/deploy.sh`
+Pasta padrão no servidor: **`/var/www/maf-recibos`**
 
 | Componente | Onde |
 |------------|------|
-| PostgreSQL | Servidor Linux (`127.0.0.1:5432`) |
-| App Node | Docker (padrão) ou systemd |
-| HTTPS | Nginx + Certbot no servidor |
-
-A app escuta só em **localhost** (padrão porta **3010**). O Nginx faz o proxy público.
-
----
-
-## Comandos do script
-
-```bash
-chmod +x scripts/deploy.sh
-
-./scripts/deploy.sh help          # ajuda
-./scripts/deploy.sh               # .env + banco + tabelas + Docker (padrão)
-./scripts/deploy.sh postgres      # só banco (se já tiver .env)
-./scripts/deploy.sh init-db       # só tabelas
-./scripts/deploy.sh systemd       # deploy sem Docker
-./scripts/deploy.sh check-port    # testar porta 3010
-./scripts/deploy.sh check-port 3011
-```
-
-Ou via npm: `npm run deploy`
+| Código | `/var/www/maf-recibos` |
+| PostgreSQL | Servidor Linux `127.0.0.1:5432` |
+| App | Docker (padrão), porta **3010** só em localhost |
+| HTTPS | Nginx + Certbot |
 
 ---
 
-## Passo a passo no servidor
+## Instalação (servidor novo)
 
-### Deploy automático (recomendado)
+**Não rode comandos em `/var/www` solto** — o projeto precisa estar clonado em `/var/www/maf-recibos`.
 
-Na primeira vez o script **cria o `.env`**, gera `SESSION_SECRET`, pergunta a senha do PostgreSQL e do admin, **cria usuário/banco**, **cria tabelas** e sobe o Docker:
+### Opção A — um comando (recomendado)
 
-```bash
-git clone … && cd Recibo-M-A-F-Transportes
-chmod +x scripts/deploy.sh
-npm ci
-./scripts/deploy.sh
-```
-
-Sem perguntas (CI ou SSH não interativo):
+Conecte por SSH e execute:
 
 ```bash
-DB_PASS='SUA_SENHA_FORTE' ADMIN_INITIAL_PASSWORD='senha_admin' ./scripts/deploy.sh
+cd /var/www
+sudo curl -fsSL https://raw.githubusercontent.com/Yran-Olv/Recibo-M-A-F-Transportes/main/scripts/bootstrap-production.sh -o bootstrap-maf.sh
+sudo DB_PASS='SUA_SENHA_POSTGRES' ADMIN_INITIAL_PASSWORD='SUA_SENHA_ADMIN' bash bootstrap-maf.sh
 ```
 
-O `.env` fica no diretório do projeto com `PGPASSWORD` e demais valores já preenchidos.
+O script instala Git, Node 20, Docker, clona o repositório, cria `.env`, banco PostgreSQL, tabelas e sobe o container.
 
-### Ajustes manuais (opcional)
+### Opção B — clone manual
 
-Se quiser editar antes do deploy: `cp .env.production.example .env && nano .env`
+```bash
+sudo mkdir -p /var/www
+cd /var/www
+sudo git clone https://github.com/Yran-Olv/Recibo-M-A-F-Transportes.git maf-recibos
+cd maf-recibos
+sudo chmod +x install.sh scripts/*.sh
+sudo DB_PASS='SUA_SENHA_POSTGRES' ADMIN_INITIAL_PASSWORD='SUA_SENHA_ADMIN' ./install.sh
+```
 
-Comandos avulsos: `postgres` (só banco), `init-db` (só tabelas).
+### Opção C — já clonou o repo
 
-### 4. Nginx + Certbot
+```bash
+cd /var/www/maf-recibos
+sudo ./install.sh
+```
 
-1. Edite `scripts/nginx-maf-recibos.conf` (`server_name` e porta `3010` no `upstream`).
+Interativo (pede senhas no terminal):
+
+```bash
+cd /var/www/maf-recibos
+sudo ./install.sh
+```
+
+---
+
+## Testar
+
+```bash
+curl -s http://127.0.0.1:3010/api/health
+```
+
+Login: usuário **`admin`**, senha em `ADMIN_INITIAL_PASSWORD` no `.env`.
+
+---
+
+## Nginx + Certbot
+
+1. Edite `scripts/nginx-maf-recibos.conf` (`server_name` e porta `3010`).
 2. `sudo cp scripts/nginx-maf-recibos.conf /etc/nginx/sites-available/maf-recibos`
 3. `sudo ln -sf /etc/nginx/sites-available/maf-recibos /etc/nginx/sites-enabled/`
 4. `sudo nginx -t && sudo systemctl reload nginx`
 5. `sudo certbot --nginx -d seu.dominio.com.br`
 
-### 5. Testar
+---
+
+## Comandos úteis (sempre dentro de `/var/www/maf-recibos`)
 
 ```bash
-curl -s http://127.0.0.1:3010/api/health
-curl -s https://seu.dominio.com.br/api/health
+cd /var/www/maf-recibos
+
+./install.sh              # reinstall + deploy completo
+./scripts/deploy.sh help
+./scripts/deploy.sh       # só redeploy Docker
+./scripts/deploy.sh systemd
+docker compose -f docker-compose.prod.yml logs -f
+```
+
+Atualizar versão:
+
+```bash
+cd /var/www/maf-recibos
+sudo git pull
+sudo ./install.sh
 ```
 
 ---
 
 ## Portas
 
-| Uso | Porta padrão |
-|-----|----------------|
-| PostgreSQL (servidor) | 5432 |
-| App (localhost) | **3010** (`MAF_HOST_PORT`) |
+| Uso | Porta |
+|-----|--------|
+| PostgreSQL | 5432 |
+| App (localhost) | **3010** |
 | Nginx | 80 / 443 |
-
-Evite usar 3000 em produção se já houver outro serviço.
 
 ---
 
-## Atualizar versão
+## Erros comuns
 
-```bash
-git pull
-./scripts/deploy.sh          # Docker
-# ou
-./scripts/deploy.sh systemd
-```
+| Erro | Causa | Solução |
+|------|--------|---------|
+| `scripts/deploy.sh: No such file` | Você está em `/var/www` sem o projeto | Use **Opção A** ou `cd /var/www/maf-recibos` |
+| `npm ci` sem `package-lock.json` | Pasta errada ou cópia incompleta | `git clone` completo, não copie arquivos soltos |
+| Porta 3010 em uso | Outro serviço | `MAF_HOST_PORT=3011` no `.env` |
 
 ---
 
 ## Desenvolvimento local
 
-- `docker compose up -d` — só Postgres dev na porta **5434**
-- `npm run dev` — app na **3000**
+Não use `install.sh` no PC de desenvolvimento. Use `cp .env.example .env`, `docker compose up -d`, `npm run dev`.

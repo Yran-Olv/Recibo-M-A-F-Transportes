@@ -15,6 +15,7 @@
     "start": "NODE_ENV=production node dist/server.cjs",
     "start:prod": "NODE_ENV=production node dist/server.cjs",
     "deploy": "bash scripts/deploy.sh",
+    "install:prod": "bash install.sh",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },

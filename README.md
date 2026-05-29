@@ -40,21 +40,28 @@ Acesse `http://localhost:3000` — usuário `admin`, senha em `ADMIN_INITIAL_PAS
 
 ## PostgreSQL no servidor
 
-## Produção (servidor com PostgreSQL + Nginx + Certbot)
+## Produção (servidor Linux)
 
-Guia: **[docs/DEPLOY-PRODUCAO.md](docs/DEPLOY-PRODUCAO.md)**
+Pasta no servidor: **`/var/www/maf-recibos`**
 
-**Um script só:**
+Guia completo: **[docs/DEPLOY-PRODUCAO.md](docs/DEPLOY-PRODUCAO.md)**
+
+**Primeira instalação (a partir de `/var/www`):**
 
 ```bash
-cp .env.production.example .env && nano .env
-DB_PASS='sua_senha' ./scripts/deploy.sh postgres   # primeira vez
-chmod +x scripts/deploy.sh
-./scripts/deploy.sh                                 # deploy Docker
-# ou: npm run deploy
+cd /var/www
+sudo curl -fsSL https://raw.githubusercontent.com/Yran-Olv/Recibo-M-A-F-Transportes/main/scripts/bootstrap-production.sh -o bootstrap-maf.sh
+sudo DB_PASS='senha_postgres' ADMIN_INITIAL_PASSWORD='senha_admin' bash bootstrap-maf.sh
 ```
 
-Depois configure Nginx (`scripts/nginx-maf-recibos.conf`) e `certbot --nginx`.
+**Se já clonou o repositório:**
+
+```bash
+cd /var/www/maf-recibos
+sudo ./install.sh
+```
+
+Depois: Nginx (`scripts/nginx-maf-recibos.conf`) + `certbot --nginx`.
 
 ## Campos do espelho
 
