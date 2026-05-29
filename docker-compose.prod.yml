@@ -20,8 +20,8 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: "3000"
-      # Dentro do container, PostgreSQL no host Linux:
-      PGHOST: ${PGHOST:-host.docker.internal}
+      # Sobrescreve .env: no container o Postgres do host é host.docker.internal
+      PGHOST: host.docker.internal
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

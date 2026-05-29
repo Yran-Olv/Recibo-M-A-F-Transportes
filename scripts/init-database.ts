@@ -22,7 +22,7 @@ async function main() {
     console.error("  1) Docker:  npm run db:up   depois   npm run db:init");
     console.error("  2) Servidor Linux com sudo:");
     console.error("     DB_PASS='sua_senha' sudo ./install.sh");
-    console.error("  3) Ajuste PGHOST, PGUSER, PGPASSWORD e PGDATABASE no arquivo .env");
+    console.error("  3) No .env use PGHOST=127.0.0.1 (no servidor; Docker usa host.docker.internal no compose)");
     process.exit(1);
   }
 

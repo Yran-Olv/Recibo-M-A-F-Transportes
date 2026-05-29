@@ -311,7 +311,8 @@ ensure_env() {
   set_env_var ADMIN_INITIAL_PASSWORD "$ADMIN_INITIAL_PASSWORD"
 
   set_env_var NODE_ENV "production"
-  set_env_var PGHOST "host.docker.internal"
+  # 127.0.0.1 no .env = scripts no host (install, db:init). Docker usa host.docker.internal no compose.
+  set_env_var PGHOST "127.0.0.1"
   set_env_var HOST "0.0.0.0"
   set_env_var PORT "3000"
   set_env_var PGPORT "5432"
@@ -378,7 +379,8 @@ init_tables() {
   load_env
   log "Tabelas do sistema..."
   npm ci
-  npx tsx scripts/init-database.ts
+  # PostgreSQL no host Linux — não usar host.docker.internal aqui
+  PGHOST=127.0.0.1 npx tsx scripts/init-database.ts
   ok "Banco de dados inicializado"
 }
 
