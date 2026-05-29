@@ -21,7 +21,7 @@ async function main() {
     console.error("\nOpções:");
     console.error("  1) Docker:  npm run db:up   depois   npm run db:init");
     console.error("  2) Servidor Linux com sudo:");
-    console.error("     DB_PASS='sua_senha' ./scripts/deploy.sh postgres");
+    console.error("     DB_PASS='sua_senha' sudo ./install.sh");
     console.error("  3) Ajuste PGHOST, PGUSER, PGPASSWORD e PGDATABASE no arquivo .env");
     process.exit(1);
   }

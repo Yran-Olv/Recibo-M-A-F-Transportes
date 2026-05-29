@@ -1,7 +1,7 @@
 # Produção: só a aplicação em Docker.
 # PostgreSQL fica no servidor (instalação nativa) — não publicamos porta do PG aqui.
 #
-# Preferível: ./scripts/deploy.sh (faz build, banco e sobe o container)
+# Preferível: sudo ./install.sh (instalação completa)
 # Manual: docker compose -f docker-compose.prod.yml up -d --build
 #
 # Nginx no host aponta para 127.0.0.1:${MAF_HOST_PORT}

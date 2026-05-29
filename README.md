@@ -42,26 +42,18 @@ Acesse `http://localhost:3000` — usuário `admin`, senha em `ADMIN_INITIAL_PAS
 
 ## Produção (servidor Linux)
 
-Pasta no servidor: **`/var/www/maf-recibos`**
-
-Guia completo: **[docs/DEPLOY-PRODUCAO.md](docs/DEPLOY-PRODUCAO.md)**
-
-**Primeira instalação (a partir de `/var/www`):**
-
-```bash
-cd /var/www
-sudo curl -fsSL https://raw.githubusercontent.com/Yran-Olv/Recibo-M-A-F-Transportes/main/scripts/bootstrap-production.sh -o bootstrap-maf.sh
-sudo DB_PASS='senha_postgres' ADMIN_INITIAL_PASSWORD='senha_admin' bash bootstrap-maf.sh
-```
-
-**Se já clonou o repositório:**
+**Um script só:** `install.sh` (portas, `.env`, banco, Docker, Nginx, Certbot).
 
 ```bash
 cd /var/www/maf-recibos
-sudo ./install.sh
+sudo DOMAIN=recibos.seudominio.com.br \
+     CERTBOT_EMAIL=admin@email.com \
+     DB_PASS='senha_pg' \
+     ADMIN_INITIAL_PASSWORD='senha_admin' \
+     ./install.sh
 ```
 
-Depois: Nginx (`scripts/nginx-maf-recibos.conf`) + `certbot --nginx`.
+Guia: **[docs/DEPLOY-PRODUCAO.md](docs/DEPLOY-PRODUCAO.md)**
 
 ## Campos do espelho
 

@@ -1,92 +1,78 @@
-# Deploy em produção — M.A.F Espelho de Frete
+# Deploy em produção — M.A.F
 
-Pasta padrão no servidor: **`/var/www/maf-recibos`**
+**Um único script:** `install.sh` na raiz do projeto.
 
-| Componente | Onde |
-|------------|------|
-| Código | `/var/www/maf-recibos` |
-| PostgreSQL | Servidor Linux `127.0.0.1:5432` |
-| App | Docker (padrão), porta **3010** só em localhost |
-| HTTPS | Nginx + Certbot |
+Pasta padrão: `/var/www/maf-recibos`
 
 ---
 
-## Instalação (servidor novo)
-
-**Não rode comandos em `/var/www` solto** — o projeto precisa estar clonado em `/var/www/maf-recibos`.
-
-### Opção A — um comando (recomendado)
-
-Conecte por SSH e execute:
-
-```bash
-cd /var/www
-sudo curl -fsSL https://raw.githubusercontent.com/Yran-Olv/Recibo-M-A-F-Transportes/main/scripts/bootstrap-production.sh -o bootstrap-maf.sh
-sudo DB_PASS='SUA_SENHA_POSTGRES' ADMIN_INITIAL_PASSWORD='SUA_SENHA_ADMIN' bash bootstrap-maf.sh
-```
-
-O script instala Git, Node 20, Docker, clona o repositório, cria `.env`, banco PostgreSQL, tabelas e sobe o container.
-
-### Opção B — clone manual
-
-```bash
-sudo mkdir -p /var/www
-cd /var/www
-sudo git clone https://github.com/Yran-Olv/Recibo-M-A-F-Transportes.git maf-recibos
-cd maf-recibos
-sudo chmod +x install.sh scripts/*.sh
-sudo DB_PASS='SUA_SENHA_POSTGRES' ADMIN_INITIAL_PASSWORD='SUA_SENHA_ADMIN' ./install.sh
-```
-
-### Opção C — já clonou o repo
+## Instalação completa (um comando)
 
 ```bash
 cd /var/www/maf-recibos
+sudo git pull
+sudo chmod +x install.sh
 sudo ./install.sh
 ```
 
-Interativo (pede senhas no terminal):
+O script faz tudo:
+
+1. Instala dependências (Node, Docker, PostgreSQL, Nginx, Certbot)
+2. Escolhe porta livre para a app (3010–3019)
+3. Cria `.env` e gera `SESSION_SECRET`
+4. Cria banco PostgreSQL e tabelas
+5. Sobe a aplicação em Docker
+6. Configura Nginx para o domínio
+7. Emite certificado HTTPS com Certbot
+
+---
+
+## Sem perguntas (recomendado no servidor)
 
 ```bash
 cd /var/www/maf-recibos
-sudo ./install.sh
+sudo DOMAIN=recibos.seudominio.com.br \
+     CERTBOT_EMAIL=admin@seudominio.com.br \
+     DB_PASS='senha_postgres_forte' \
+     ADMIN_INITIAL_PASSWORD='senha_admin' \
+     ./install.sh
 ```
+
+O domínio precisa apontar (DNS A) para o IP do servidor e a porta **80** estar aberta no firewall antes do Certbot.
 
 ---
 
-## Testar
+## Primeira vez (ainda sem o código)
 
 ```bash
-curl -s http://127.0.0.1:3010/api/health
+cd /var/www
+sudo curl -fsSL https://raw.githubusercontent.com/Yran-Olv/Recibo-M-A-F-Transportes/main/install.sh -o install-maf.sh
+sudo DOMAIN=recibos.seudominio.com.br \
+     CERTBOT_EMAIL=admin@email.com \
+     DB_PASS='senha_pg' \
+     ADMIN_INITIAL_PASSWORD='senha_admin' \
+     bash install-maf.sh
 ```
 
-Login: usuário **`admin`**, senha em `ADMIN_INITIAL_PASSWORD` no `.env`.
+Isso clona em `/var/www/maf-recibos` e executa a instalação.
 
 ---
 
-## Nginx + Certbot
+## Variáveis opcionais
 
-1. Edite `scripts/nginx-maf-recibos.conf` (`server_name` e porta `3010`).
-2. `sudo cp scripts/nginx-maf-recibos.conf /etc/nginx/sites-available/maf-recibos`
-3. `sudo ln -sf /etc/nginx/sites-available/maf-recibos /etc/nginx/sites-enabled/`
-4. `sudo nginx -t && sudo systemctl reload nginx`
-5. `sudo certbot --nginx -d seu.dominio.com.br`
+| Variável | Descrição |
+|----------|-----------|
+| `DOMAIN` | Domínio público |
+| `CERTBOT_EMAIL` | E-mail Let's Encrypt |
+| `DB_PASS` | Senha PostgreSQL |
+| `ADMIN_INITIAL_PASSWORD` | Senha do login `admin` |
+| `MAF_HOST_PORT` | Forçar porta da app (senão escolhe 3010+) |
+| `SKIP_NGINX=1` | Não configura Nginx |
+| `SKIP_CERTBOT=1` | Só HTTP, sem HTTPS |
 
 ---
 
-## Comandos úteis (sempre dentro de `/var/www/maf-recibos`)
-
-```bash
-cd /var/www/maf-recibos
-
-./install.sh              # reinstall + deploy completo
-./scripts/deploy.sh help
-./scripts/deploy.sh       # só redeploy Docker
-./scripts/deploy.sh systemd
-docker compose -f docker-compose.prod.yml logs -f
-```
-
-Atualizar versão:
+## Atualizar versão
 
 ```bash
 cd /var/www/maf-recibos
@@ -96,26 +82,6 @@ sudo ./install.sh
 
 ---
 
-## Portas
-
-| Uso | Porta |
-|-----|--------|
-| PostgreSQL | 5432 |
-| App (localhost) | **3010** |
-| Nginx | 80 / 443 |
-
----
-
-## Erros comuns
-
-| Erro | Causa | Solução |
-|------|--------|---------|
-| `scripts/deploy.sh: No such file` | Você está em `/var/www` sem o projeto | Use **Opção A** ou `cd /var/www/maf-recibos` |
-| `npm ci` sem `package-lock.json` | Pasta errada ou cópia incompleta | `git clone` completo, não copie arquivos soltos |
-| Porta 3010 em uso | Outro serviço | `MAF_HOST_PORT=3011` no `.env` |
-
----
-
 ## Desenvolvimento local
 
-Não use `install.sh` no PC de desenvolvimento. Use `cp .env.example .env`, `docker compose up -d`, `npm run dev`.
+Use `npm run dev` — **não** use `install.sh` no PC de desenvolvimento.
