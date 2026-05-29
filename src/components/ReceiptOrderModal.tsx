@@ -60,11 +60,6 @@ function faturaFromMotorista(driver: SearchableItem): string {
   return driver.nome?.trim() || "";
 }
 
-/** Agente: só o vinculado no cadastro do motorista (catálogo Agentes) — nunca o nome do motorista. */
-function agenteFromMotorista(driver: SearchableItem): string {
-  return driver.agente_nome?.trim() || "";
-}
-
 export function ReceiptOrderModal({
   open,
   onClose,
@@ -369,7 +364,6 @@ export function ReceiptOrderModal({
       cpf: formatCpf(saved.cpf || ""),
       fone: formatTelefone(saved.telefone || ""),
       fatura: faturaFromMotorista(saved),
-      agente: agenteFromMotorista(saved),
     }));
   };
 
@@ -647,7 +641,7 @@ export function ReceiptOrderModal({
                 <div>
                   <p className="font-semibold text-slate-900 text-sm">Motorista e caminhão</p>
                   <p className="text-xs text-slate-500">
-                Ao escolher o motorista, a placa habitual e o campo Fatura são preenchidos. O Agente vem do cadastro vinculado ao motorista (catálogo Agentes).
+                Ao escolher o motorista, a placa habitual e o campo Fatura são preenchidos. O Agente é escolhido abaixo (cadastro em Catálogos → Agentes).
               </p>
                 </div>
               </div>
@@ -666,7 +660,6 @@ export function ReceiptOrderModal({
                     cidade: "",
                     uf: "",
                     fatura: faturaFromMotorista(i),
-                    agente: agenteFromMotorista(i),
                   };
                   if (i.placa) {
                     const v =
@@ -684,7 +677,7 @@ export function ReceiptOrderModal({
                   } else {
                     setSelVeiculo(null);
                   }
-                  setTransporte((t) => ({ ...t, ...next }));
+                  setTransporte((t) => ({ ...t, ...next, agente: "" }));
                 }}
                 onClear={() => {
                   setSelMotorista(null);
@@ -767,8 +760,7 @@ export function ReceiptOrderModal({
                           )}
                       </select>
                       <p className="text-xs text-slate-500 mt-1">
-                        Representante ou corretor — <strong>não</strong> é o motorista. Cadastre em Catálogos →
-                        Agentes e vincule em Frota → motorista → Agente habitual.
+                        Escolha na lista (Catálogos → Agentes). Não é o motorista.
                       </p>
                     </div>
                   </div>

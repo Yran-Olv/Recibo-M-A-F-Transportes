@@ -83,7 +83,6 @@ export function CatalogsTab({
   const [telefone, setTelefone] = useState("");
   const [vehicleLink, setVehicleLink] = useState<VehicleLinkMode>("new");
   const [existingVehicleId, setExistingVehicleId] = useState("");
-  const [agenteId, setAgenteId] = useState("");
   const [saving, setSaving] = useState(false);
   const [dialog, setDialog] = useState<DialogState>({
     open: false,
@@ -122,7 +121,6 @@ export function CatalogsTab({
     setTelefone("");
     setVehicleLink("new");
     setExistingVehicleId("");
-    setAgenteId("");
     setEditingId(null);
   };
 
@@ -133,7 +131,6 @@ export function CatalogsTab({
     if (activeCatalog === "fleet") {
       setCpf(item.cpf || "");
       setTelefone(item.telefone || "");
-      setAgenteId(item.agente_id ? String(item.agente_id) : "");
       setPlaca(item.placa || "");
       setCidade(item.cidade || "");
       setEstado(item.estado || "");
@@ -230,7 +227,6 @@ export function CatalogsTab({
           placa: vehicleLink === "new" ? placa.trim() : undefined,
           cidade: vehicleLink === "new" ? cidade.trim() : undefined,
           estado: vehicleLink === "new" ? estado.trim().toUpperCase() : undefined,
-          agente_id: agenteId ? Number(agenteId) : undefined,
         };
 
         const driverUrl = isEditing ? `/api/catalog/drivers/${editingId}` : "/api/catalog/drivers";
@@ -561,7 +557,7 @@ export function CatalogsTab({
               {activeCatalog === "fleet"
                 ? "Cadastre o motorista e o caminhão no mesmo formulário. Use “caminhão já cadastrado” se outro motorista emprestar o mesmo veículo."
                 : activeCatalog === "agentes"
-                  ? "Pessoas ou empresas que atuam como agente/corretor no frete — não cadastre o motorista aqui."
+                  ? "Cadastro só dos agentes. Na emissão do espelho você escolhe o agente na etapa Transporte."
                   : activeCatalog === "faturas"
                     ? "Tipos ou nomes de fatura usados no espelho (opcional; o padrão costuma ser o nome do motorista)."
                     : "Preencha apenas com dados reais dos seus clientes."}
@@ -607,31 +603,6 @@ export function CatalogsTab({
                       onChange={setTelefone}
                       className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition"
                     />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
-                      Agente habitual (no espelho)
-                    </label>
-                    <select
-                      value={agenteId}
-                      onChange={(e) => setAgenteId(e.target.value)}
-                      className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition"
-                    >
-                      <option value="">Nenhum — espelho sem agente ou escolher na emissão</option>
-                      {agentes.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.nome}
-                        </option>
-                      ))}
-                    </select>
-                    {agentes.length === 0 && (
-                      <p className="text-xs text-amber-700 mt-1">
-                        Cadastre primeiro em Catálogos → Agentes (ex.: corretor, representante comercial).
-                      </p>
-                    )}
-                    <p className="text-xs text-gray-500 mt-1">
-                      Não é o motorista: é quem aparece no campo Agente do espelho impresso.
-                    </p>
                   </div>
 
                   <div className="sm:col-span-2 border-t border-gray-200 pt-4 mt-1 space-y-3">
@@ -878,7 +849,6 @@ export function CatalogsTab({
                       <th className="px-5 py-3">Motorista</th>
                       <th className="px-5 py-3">CPF</th>
                       <th className="px-5 py-3">Telefone</th>
-                      <th className="px-5 py-3">Agente</th>
                       <th className="px-5 py-3">Placa (caminhão)</th>
                       <th className="px-5 py-3">Cidade / UF</th>
                       <th className="px-5 py-3 w-24" />
@@ -906,7 +876,6 @@ export function CatalogsTab({
                           <td className="px-5 py-3 text-gray-900">{item.nome}</td>
                           <td className="px-5 py-3 font-mono text-xs">{item.cpf || "-"}</td>
                           <td className="px-5 py-3 font-mono text-xs">{item.telefone || "-"}</td>
-                          <td className="px-5 py-3 text-xs">{item.agente_nome || "—"}</td>
                           <td className="px-5 py-3 font-mono font-bold text-gray-900">{item.placa || "—"}</td>
                           <td className="px-5 py-3 text-xs text-gray-500">
                             {item.placa ? (
