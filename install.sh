@@ -35,6 +35,15 @@ as_root() {
   if [[ "${EUID:-0}" -eq 0 ]]; then "$@"; else sudo "$@"; fi
 }
 
+# sudo -u postgres (não usar as_root: como root ele executaria só "-u")
+run_as_postgres() {
+  if [[ "${EUID:-0}" -eq 0 ]]; then
+    runuser -u postgres -- "$@" 2>/dev/null || sudo -u postgres "$@"
+  else
+    sudo -u postgres "$@"
+  fi
+}
+
 # --- Se baixou com curl (fora do repo), clona e reexecuta ---
 _self="${BASH_SOURCE[0]}"
 if [[ ! -f "$(dirname "$_self")/package-lock.json" ]] && [[ ! -f "./package-lock.json" ]]; then
@@ -96,6 +105,22 @@ load_env() {
   # shellcheck disable=SC1091
   source .env
   set +a
+}
+
+# Valores de exemplo no .env.production.example — tratar como vazio e perguntar de novo
+is_placeholder_value() {
+  local v="${1,,}"
+  [[ -z "$1" ]] && return 0
+  [[ "$v" == *"seudominio"* ]] && return 0
+  [[ "$v" == *"example.com"* ]] && return 0
+  [[ "$v" == *"seu.dominio"* ]] && return 0
+  [[ "$v" == *"changeme"* ]] && return 0
+  return 1
+}
+
+env_value_is_real() {
+  local v="$1"
+  [[ -n "$v" ]] && ! is_placeholder_value "$v"
 }
 
 # =============================================================================
@@ -218,9 +243,14 @@ check_ports_for_nginx() {
 prompt_if_empty() {
   local var_name="$1" prompt_text="$2" default="${3:-}"
   local current="${!var_name:-}"
-  [[ -n "$current" ]] && return 0
+  if env_value_is_real "$current"; then
+    return 0
+  fi
   current="$(get_env_var "$var_name")"
-  [[ -n "$current" ]] && eval "$var_name=\$current" && return 0
+  if env_value_is_real "$current"; then
+    eval "$var_name=\$current"
+    return 0
+  fi
   if [[ -t 0 ]]; then
     read -rp "$prompt_text${default:+ [$default]}: " input
     input="${input:-$default}"
@@ -244,6 +274,20 @@ ensure_env() {
     ok "SESSION_SECRET gerado"
   fi
 
+  echo ""
+  log "Site público (Nginx + HTTPS)"
+  DOMAIN="${DOMAIN:-$(get_env_var DOMAIN)}"
+  CERTBOT_EMAIL="${CERTBOT_EMAIL:-$(get_env_var CERTBOT_EMAIL)}"
+  if ! env_value_is_real "$DOMAIN"; then DOMAIN=""; fi
+  if ! env_value_is_real "$CERTBOT_EMAIL"; then CERTBOT_EMAIL=""; fi
+  prompt_if_empty DOMAIN "Domínio (ex. recibos.minhaempresa.com.br)"
+  prompt_if_empty CERTBOT_EMAIL "E-mail para Certbot / Let's Encrypt"
+  [[ -n "$DOMAIN" ]] && set_env_var DOMAIN "$DOMAIN"
+  [[ -n "$CERTBOT_EMAIL" ]] && set_env_var CERTBOT_EMAIL "$CERTBOT_EMAIL"
+  [[ -n "$DOMAIN" ]] && set_env_var APP_URL "https://${DOMAIN}"
+  echo ""
+
+  log "Senhas do sistema"
   DB_PASS="${DB_PASS:-$(get_env_var PGPASSWORD)}"
   if [[ -z "$DB_PASS" ]]; then
     if [[ -t 0 ]]; then
@@ -265,14 +309,6 @@ ensure_env() {
     ADMIN_INITIAL_PASSWORD="${ADMIN_INITIAL_PASSWORD:-admin123}"
   fi
   set_env_var ADMIN_INITIAL_PASSWORD "$ADMIN_INITIAL_PASSWORD"
-
-  DOMAIN="${DOMAIN:-$(get_env_var DOMAIN)}"
-  CERTBOT_EMAIL="${CERTBOT_EMAIL:-$(get_env_var CERTBOT_EMAIL)}"
-  prompt_if_empty DOMAIN "Domínio público (ex. recibos.empresa.com.br)"
-  prompt_if_empty CERTBOT_EMAIL "E-mail para Certbot (Let's Encrypt)"
-  [[ -n "$DOMAIN" ]] && set_env_var DOMAIN "$DOMAIN"
-  [[ -n "$CERTBOT_EMAIL" ]] && set_env_var CERTBOT_EMAIL "$CERTBOT_EMAIL"
-  [[ -n "$DOMAIN" ]] && set_env_var APP_URL "https://${DOMAIN}"
 
   set_env_var NODE_ENV "production"
   set_env_var PGHOST "host.docker.internal"
@@ -310,7 +346,7 @@ setup_postgres() {
   fi
 
   log "Criando usuário e banco PostgreSQL..."
-  as_root -u postgres psql -v ON_ERROR_STOP=1 <<SQL
+  run_as_postgres psql -v ON_ERROR_STOP=1 <<SQL
 DO \$\$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${db_user}') THEN
@@ -325,14 +361,14 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${db_name}')\gexec
 GRANT ALL PRIVILEGES ON DATABASE ${db_name} TO ${db_user};
 SQL
 
-  as_root -u postgres psql -d "$db_name" -v ON_ERROR_STOP=1 <<SQL
+  run_as_postgres psql -d "$db_name" -v ON_ERROR_STOP=1 <<SQL
 GRANT ALL ON SCHEMA public TO ${db_user};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${db_user};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${db_user};
 SQL
 
   [[ -f "${ROOT}/db/schema.sql" ]] && \
-    as_root -u postgres psql -d "$db_name" -f "${ROOT}/db/schema.sql" 2>/dev/null || true
+    run_as_postgres psql -d "$db_name" -f "${ROOT}/db/schema.sql" 2>/dev/null || true
 
   postgres_can_connect "$db_pass" || die "Falha ao conectar no PostgreSQL após setup"
   ok "PostgreSQL pronto"
