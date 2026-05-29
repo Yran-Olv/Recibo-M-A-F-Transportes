@@ -317,6 +317,7 @@ export default function App() {
                   recipients={recipients}
                   drivers={drivers}
                   vehicles={vehicles}
+                  agentes={agentes}
                   receipts={receipts}
                   databaseMode={databaseMode}
                   onOpenHistory={() => setActiveTab("history")}

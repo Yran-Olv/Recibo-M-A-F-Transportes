@@ -560,9 +560,11 @@ export function CatalogsTab({
             <p className="text-xs text-gray-500 -mt-2">
               {activeCatalog === "fleet"
                 ? "Cadastre o motorista e o caminhão no mesmo formulário. Use “caminhão já cadastrado” se outro motorista emprestar o mesmo veículo."
-                : isSimpleNameCatalog
-                  ? "Nomes usados nos campos Fatura e Agente do espelho — evita digitar manualmente a cada frete."
-                  : "Preencha apenas com dados reais dos seus clientes."}
+                : activeCatalog === "agentes"
+                  ? "Pessoas ou empresas que atuam como agente/corretor no frete — não cadastre o motorista aqui."
+                  : activeCatalog === "faturas"
+                    ? "Tipos ou nomes de fatura usados no espelho (opcional; o padrão costuma ser o nome do motorista)."
+                    : "Preencha apenas com dados reais dos seus clientes."}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -607,13 +609,15 @@ export function CatalogsTab({
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Agente habitual</label>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                      Agente habitual (no espelho)
+                    </label>
                     <select
                       value={agenteId}
                       onChange={(e) => setAgenteId(e.target.value)}
                       className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition"
                     >
-                      <option value="">Selecionar na ordem de frete</option>
+                      <option value="">Nenhum — espelho sem agente ou escolher na emissão</option>
                       {agentes.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.nome}
@@ -622,9 +626,12 @@ export function CatalogsTab({
                     </select>
                     {agentes.length === 0 && (
                       <p className="text-xs text-amber-700 mt-1">
-                        Cadastre agentes na tabela “Agentes” ao lado para vincular aqui.
+                        Cadastre primeiro em Catálogos → Agentes (ex.: corretor, representante comercial).
                       </p>
                     )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      Não é o motorista: é quem aparece no campo Agente do espelho impresso.
+                    </p>
                   </div>
 
                   <div className="sm:col-span-2 border-t border-gray-200 pt-4 mt-1 space-y-3">
@@ -735,7 +742,11 @@ export function CatalogsTab({
                     type="text"
                     required
                     autoComplete="off"
-                    placeholder={activeCatalog === "faturas" ? "Ex.: fatura normal, cliente X…" : "Ex.: nome do agente"}
+                    placeholder={
+                      activeCatalog === "faturas"
+                        ? "Ex.: fatura normal, cliente X…"
+                        : "Ex.: João Silva Corretor, Comercial ABC…"
+                    }
                     value={nome}
                     onChange={(e) => setNome(e.target.value)}
                     className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition"

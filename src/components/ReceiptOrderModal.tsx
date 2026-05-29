@@ -46,6 +46,7 @@ interface ReceiptOrderModalProps {
   recipients: CatalogItem[];
   drivers: CatalogItem[];
   vehicles: CatalogItem[];
+  agentes: CatalogItem[];
   initialData?: Partial<Receipt> | null;
   onCreated: (receipt: Receipt, meta?: { isEdit?: boolean }) => void;
   onAddSender: (item: CatalogItem) => void;
@@ -54,13 +55,14 @@ interface ReceiptOrderModalProps {
   onAddVehicle: (item: CatalogItem) => void;
 }
 
-/** Fatura e agente no espelho seguem o motorista escolhido. */
+/** Fatura no espelho: por padrão o nome do motorista (campo separado do agente). */
 function faturaFromMotorista(driver: SearchableItem): string {
   return driver.nome?.trim() || "";
 }
 
+/** Agente: só o vinculado no cadastro do motorista (catálogo Agentes) — nunca o nome do motorista. */
 function agenteFromMotorista(driver: SearchableItem): string {
-  return driver.agente_nome?.trim() || driver.nome?.trim() || "";
+  return driver.agente_nome?.trim() || "";
 }
 
 export function ReceiptOrderModal({
@@ -71,6 +73,7 @@ export function ReceiptOrderModal({
   recipients,
   drivers,
   vehicles,
+  agentes,
   initialData,
   onCreated,
   onAddSender,
@@ -195,7 +198,7 @@ export function ReceiptOrderModal({
       cidade: initialData.veiculo_cidade || "",
       uf: initialData.veiculo_estado || "",
       fatura: initialData.fatura_nome?.trim() || motoristaNome,
-      agente: initialData.agente_nome?.trim() || motoristaNome,
+      agente: initialData.agente_nome?.trim() || "",
     });
     setStep(1);
   }, [open, initialData]);
@@ -242,7 +245,7 @@ export function ReceiptOrderModal({
     veiculo_cidade: transporte.cidade,
     veiculo_estado: transporte.uf,
     fatura_nome: transporte.fatura.trim() || transporte.motorista.trim(),
-    agente_nome: transporte.agente.trim() || transporte.motorista.trim(),
+    agente_nome: transporte.agente.trim(),
   }), [numero, autoNumber, data, isBlank, remetente, destinatario, mercadoria, valores, obs, transporte]);
 
   if (!open) return null;
@@ -644,7 +647,7 @@ export function ReceiptOrderModal({
                 <div>
                   <p className="font-semibold text-slate-900 text-sm">Motorista e caminhão</p>
                   <p className="text-xs text-slate-500">
-                Ao escolher o motorista, a placa habitual e os campos Fatura e Agente do espelho são preenchidos automaticamente.
+                Ao escolher o motorista, a placa habitual e o campo Fatura são preenchidos. O Agente vem do cadastro vinculado ao motorista (catálogo Agentes).
               </p>
                 </div>
               </div>
@@ -720,18 +723,54 @@ export function ReceiptOrderModal({
                 onQuickAdd={quickAddVehicle}
               />
               {transporte.motorista.trim() ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 grid sm:grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Fatura</p>
-                    <p className="font-semibold text-slate-900 mt-0.5">{transporte.fatura || "—"}</p>
-                    <p className="text-xs text-slate-500 mt-1">Mesmo nome do motorista (automático).</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Agente</p>
-                    <p className="font-semibold text-slate-900 mt-0.5">{transporte.agente || "—"}</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Agente habitual do cadastro do motorista, ou o próprio motorista.
-                    </p>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4 text-sm">
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Fatura</p>
+                      <p className="font-semibold text-slate-900 mt-0.5">{transporte.fatura || "—"}</p>
+                      <p className="text-xs text-slate-500 mt-1">Preenchida com o nome do motorista (padrão do espelho).</p>
+                    </div>
+                    <div>
+                      <label className={labelClass} htmlFor="espelho-agente">
+                        Agente no espelho
+                      </label>
+                      <select
+                        id="espelho-agente"
+                        value={
+                          agentes.find(
+                            (a) => a.nome?.trim().toUpperCase() === transporte.agente.trim().toUpperCase()
+                          )?.id ?? (transporte.agente.trim() ? "__custom__" : "")
+                        }
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "") {
+                            setTransporte((t) => ({ ...t, agente: "" }));
+                            return;
+                          }
+                          if (v === "__custom__") return;
+                          const picked = agentes.find((a) => String(a.id) === v);
+                          setTransporte((t) => ({ ...t, agente: picked?.nome?.trim() || "" }));
+                        }}
+                        className={inputClass}
+                      >
+                        <option value="">Sem agente / escolher…</option>
+                        {agentes.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.nome}
+                          </option>
+                        ))}
+                        {transporte.agente.trim() &&
+                          !agentes.some(
+                            (a) => a.nome?.trim().toUpperCase() === transporte.agente.trim().toUpperCase()
+                          ) && (
+                            <option value="__custom__">{transporte.agente} (salvo no espelho)</option>
+                          )}
+                      </select>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Representante ou corretor — <strong>não</strong> é o motorista. Cadastre em Catálogos →
+                        Agentes e vincule em Frota → motorista → Agente habitual.
+                      </p>
+                    </div>
                   </div>
                 </div>
               ) : null}

@@ -86,9 +86,7 @@ export function ReceiptPrintout({
   const faturaNome = isBlank
     ? ""
     : receipt.fatura_nome?.trim() || receipt.motorista_nome?.trim() || "";
-  const agenteNome = isBlank
-    ? ""
-    : receipt.agente_nome?.trim() || receipt.motorista_nome?.trim() || "";
+  const agenteNome = isBlank ? "" : receipt.agente_nome?.trim() || "";
 
   const logoSrc = company.logo_base64 || SITE_LOGO_URL;
 

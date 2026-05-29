@@ -9,6 +9,7 @@ interface ReceiptFormTabProps {
   recipients: CatalogItem[];
   drivers: CatalogItem[];
   vehicles: CatalogItem[];
+  agentes: CatalogItem[];
   receipts: Receipt[];
   databaseMode?: "json" | "postgresql";
   onOpenHistory?: () => void;
@@ -27,6 +28,7 @@ export function ReceiptFormTab({
   recipients,
   drivers,
   vehicles,
+  agentes,
   receipts,
   databaseMode = "json",
   onOpenHistory,
@@ -153,6 +155,7 @@ export function ReceiptFormTab({
         recipients={recipients}
         drivers={drivers}
         vehicles={vehicles}
+        agentes={agentes}
         initialData={initialReceiptData}
         onCreated={onReceiptCreated}
         onAddSender={onAddSender}

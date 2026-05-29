@@ -1244,13 +1244,13 @@ function normalizeReceiptForSave(receipt: Receipt): Receipt {
   };
 }
 
-/** Fatura e agente no espelho seguem o motorista quando não informados. */
+/** Fatura no espelho: padrão = nome do motorista se vazio. Agente não usa motorista. */
 function applyTransportDefaults(receipt: Receipt): Receipt {
   const motorista = (receipt.motorista_nome || "").trim();
   return {
     ...receipt,
     fatura_nome: (receipt.fatura_nome || "").trim() || motorista,
-    agente_nome: (receipt.agente_nome || "").trim() || motorista,
+    agente_nome: (receipt.agente_nome || "").trim(),
   };
 }
 
