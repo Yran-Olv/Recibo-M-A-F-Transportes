@@ -225,15 +225,40 @@ port_listening() {
   fi
 }
 
-app_healthy_on_port() {
+# Só conta se for a app M.A.F (JSON), não outro site na mesma porta
+is_maf_health() {
   local port="$1"
-  curl -sf "http://127.0.0.1:${port}/api/health" &>/dev/null
+  local body
+  body="$(curl -sf --max-time 3 "http://127.0.0.1:${port}/api/health" 2>/dev/null)" || return 1
+  echo "$body" | grep -qE '"status"[[:space:]]*:[[:space:]]*"ok"'
+}
+
+describe_port() {
+  local port="$1"
+  if is_maf_health "$port"; then
+    ok "Porta ${port}: M.A.F respondendo em /api/health"
+  elif port_listening "$port"; then
+    warn "Porta ${port}: OCUPADA por outro serviço (não é M.A.F)"
+    if command -v ss &>/dev/null; then
+      ss -tlnp | grep ":${port} " || true
+    fi
+  else
+    ok "Porta ${port}: livre"
+  fi
 }
 
 find_app_port() {
   local p saved
   saved="$(get_env_var MAF_HOST_PORT)"
-  if [[ -n "$saved" ]] && { ! port_listening "$saved" || app_healthy_on_port "$saved"; }; then
+
+  if [[ -n "$saved" ]] && is_maf_health "$saved"; then
+    echo "$saved"
+    return 0
+  fi
+
+  if [[ -n "$saved" ]] && port_listening "$saved"; then
+    warn "MAF_HOST_PORT=${saved} está com outro app — procurando porta livre (${MAF_PORT_START}-$((MAF_PORT_END - 1)))..."
+  elif [[ -n "$saved" ]] && ! port_listening "$saved"; then
     echo "$saved"
     return 0
   fi
@@ -243,12 +268,12 @@ find_app_port() {
       echo "$p"
       return 0
     fi
-    if app_healthy_on_port "$p"; then
+    if is_maf_health "$p"; then
       echo "$p"
       return 0
     fi
   done
-  die "Nenhuma porta livre entre ${MAF_PORT_START} e $((MAF_PORT_END - 1))."
+  die "Nenhuma porta livre entre ${MAF_PORT_START} e $((MAF_PORT_END - 1)). Libere uma porta ou pare o outro serviço."
 }
 
 check_ports_for_nginx() {
@@ -384,10 +409,15 @@ ensure_env() {
   set_env_var PGUSER "maf_user"
   set_env_var PGDATABASE "maf_recibos"
 
-  local app_port
+  log "Verificando porta da aplicação..."
+  local app_port prev_port
+  prev_port="$(get_env_var MAF_HOST_PORT)"
   app_port="$(find_app_port)"
   set_env_var MAF_HOST_PORT "$app_port"
-  ok "Porta da aplicação: ${app_port}"
+  describe_port "$app_port"
+  if [[ -n "$prev_port" ]] && [[ "$prev_port" != "$app_port" ]]; then
+    warn "MAF_HOST_PORT alterado: ${prev_port} → ${app_port} (Nginx será atualizado no deploy)"
+  fi
   check_ports_for_nginx
 }
 
@@ -522,36 +552,50 @@ init_tables() {
 # =============================================================================
 
 deploy_app() {
-  load_env
-  local host_port="${MAF_HOST_PORT:-3010}"
-  local health_url="http://127.0.0.1:${host_port}/api/health"
-
   log "=== Docker (app em produção) ==="
-  echo "  cd ${ROOT}"
-  echo "  docker compose -f docker-compose.prod.yml up -d --build"
 
-  if port_listening "$host_port" && ! app_healthy_on_port "$host_port"; then
-    die "Porta ${host_port} ocupada por outro serviço. Ajuste MAF_HOST_PORT no .env"
+  log "Verificando porta antes do container..."
+  local host_port prev
+  prev="$(get_env_var MAF_HOST_PORT)"
+  host_port="$(find_app_port)"
+  set_env_var MAF_HOST_PORT "$host_port"
+  load_env
+  describe_port "$host_port"
+
+  if port_listening "$host_port" && ! is_maf_health "$host_port"; then
+    die "Porta ${host_port} ainda ocupada por outro serviço. Libere a porta ou defina MAF_HOST_PORT livre no .env"
   fi
 
-  log "Build e container..."
-  docker compose -f docker-compose.prod.yml up -d --build
+  if is_maf_health "$host_port"; then
+    log "M.A.F já ativa na ${host_port} — rebuild do container..."
+  else
+    ok "Porta ${host_port} livre para o container"
+  fi
 
-  log "Aguardando health check (${health_url})..."
+  echo "  cd ${ROOT}"
+  echo "  docker compose -f docker-compose.prod.yml up -d --build"
+  log "Build e container..."
+  if ! docker compose -f docker-compose.prod.yml up -d --build; then
+    die "docker compose falhou (porta ${host_port} em uso?). Veja: docker compose -f docker-compose.prod.yml logs"
+  fi
+
+  local health_url="http://127.0.0.1:${host_port}/api/health"
+  log "Aguardando /api/health da M.A.F (${health_url})..."
   local i body
   for i in $(seq 1 20); do
-    if body="$(curl -sf "$health_url" 2>/dev/null)"; then
-      ok "App respondendo: ${health_url}"
+    if body="$(curl -sf --max-time 3 "$health_url" 2>/dev/null)" && echo "$body" | grep -qE '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+      ok "M.A.F respondendo (JSON health OK)"
       echo "  ${body}"
       return 0
     fi
     sleep 3
   done
 
-  warn "Health check não respondeu a tempo."
-  echo "  Teste: curl -s ${health_url}"
-  echo "  Logs:  docker compose -f docker-compose.prod.yml logs -f"
-  return 1
+  if body="$(curl -sf --max-time 3 "http://127.0.0.1:${host_port}/" 2>/dev/null | head -c 200)"; then
+    warn "Algo responde na porta ${host_port}, mas não é a M.A.F (/api/health sem status ok)."
+    echo "  Início da resposta: ${body}..."
+  fi
+  die "Container não passou no health check. Logs: docker compose -f docker-compose.prod.yml logs -f"
 }
 
 # =============================================================================
