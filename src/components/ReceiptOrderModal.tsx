@@ -57,9 +57,30 @@ interface ReceiptOrderModalProps {
   onAddVehicle: (item: CatalogItem) => void;
 }
 
-/** Fatura no espelho: por padrão o nome do motorista (campo separado do agente). */
-function faturaFromMotorista(driver: SearchableItem): string {
-  return driver.nome?.trim() || "";
+type FaturaParte = "remetente" | "destinatario";
+
+type PersonFields = {
+  nome: string;
+  endereco: string;
+  cidade: string;
+  estado: string;
+  cnpj_cpf: string;
+  ie: string;
+};
+
+function faturaNomeFromParte(parte: FaturaParte, rem: PersonFields, dest: PersonFields): string {
+  return (parte === "destinatario" ? dest.nome : rem.nome).trim();
+}
+
+function detectFaturaParte(
+  faturaNome: string,
+  rem: PersonFields,
+  dest: PersonFields
+): FaturaParte {
+  const f = faturaNome.trim().toUpperCase();
+  const destNome = dest.nome.trim().toUpperCase();
+  if (f && destNome && f === destNome) return "destinatario";
+  return "remetente";
 }
 
 export function ReceiptOrderModal({
@@ -112,6 +133,7 @@ export function ReceiptOrderModal({
   const [transporte, setTransporte] = useState({
     motorista: "", cpf: "", fone: "", placa: "", cidade: "", uf: "", fatura: "", agente: "",
   });
+  const [faturaParte, setFaturaParte] = useState<FaturaParte>("remetente");
 
   const applyCnpjPerson = (
     data: CnpjLookupResult,
@@ -205,12 +227,39 @@ export function ReceiptOrderModal({
       placa: formatPlaca(initialData.veiculo_placa || ""),
       cidade: initialData.veiculo_cidade || "",
       uf: initialData.veiculo_estado || "",
-      fatura: initialData.fatura_nome?.trim() || motoristaNome,
+      fatura: initialData.fatura_nome?.trim() || "",
       agente: initialData.agente_nome?.trim() || "",
     });
+    setFaturaParte(
+      detectFaturaParte(
+        initialData.fatura_nome || "",
+        {
+          nome: initialData.remetente_nome || "",
+          endereco: "",
+          cidade: "",
+          estado: "",
+          cnpj_cpf: "",
+          ie: "",
+        },
+        {
+          nome: initialData.destinatario_nome || "",
+          endereco: "",
+          cidade: "",
+          estado: "",
+          cnpj_cpf: "",
+          ie: "",
+        }
+      )
+    );
     setCompanyId(initialData.company_id ?? companies[0]?.id ?? null);
     setStep(1);
   }, [open, initialData, companies]);
+
+  useEffect(() => {
+    if (isBlank) return;
+    const nome = faturaNomeFromParte(faturaParte, remetente, destinatario);
+    setTransporte((t) => (t.fatura === nome ? t : { ...t, fatura: nome }));
+  }, [faturaParte, remetente.nome, destinatario.nome, isBlank]);
 
   useEffect(() => {
     const s = parseBrDecimalFromUser(valores.seguro);
@@ -254,7 +303,7 @@ export function ReceiptOrderModal({
     veiculo_placa: transporte.placa,
     veiculo_cidade: transporte.cidade,
     veiculo_estado: transporte.uf,
-    fatura_nome: transporte.fatura.trim() || transporte.motorista.trim(),
+    fatura_nome: transporte.fatura.trim(),
     agente_nome: transporte.agente.trim(),
   }), [numero, autoNumber, data, isBlank, companyId, companies, remetente, destinatario, mercadoria, valores, obs, transporte]);
 
@@ -337,6 +386,11 @@ export function ReceiptOrderModal({
     if (n === 3 && !mercadoria.natureza.trim()) return "Informe a mercadoria.";
     if (n === 4 && !transporte.motorista.trim()) return "Selecione o motorista.";
     if (n === 4 && !transporte.placa.trim()) return "Selecione o veículo.";
+    if (n === 4 && !faturaNomeFromParte(faturaParte, remetente, destinatario)) {
+      return faturaParte === "destinatario"
+        ? "Informe o destinatário para definir quem paga a fatura."
+        : "Informe o remetente para definir quem paga a fatura.";
+    }
     return null;
   };
 
@@ -434,7 +488,6 @@ export function ReceiptOrderModal({
       motorista: saved.nome || "",
       cpf: formatCpf(saved.cpf || ""),
       fone: formatTelefone(saved.telefone || ""),
-      fatura: faturaFromMotorista(saved),
     }));
   };
 
@@ -755,7 +808,7 @@ export function ReceiptOrderModal({
                 <div>
                   <p className="font-semibold text-slate-900 text-sm">Motorista e caminhão</p>
                   <p className="text-xs text-slate-500">
-                Ao escolher o motorista, a placa habitual e o campo Fatura são preenchidos. O Agente é escolhido abaixo (cadastro em Catálogos → Agentes).
+                Ao escolher o motorista, a placa habitual é preenchida. Defina quem paga a fatura (remetente ou destinatário) e o agente abaixo.
               </p>
                 </div>
               </div>
@@ -773,7 +826,6 @@ export function ReceiptOrderModal({
                     placa: "",
                     cidade: "",
                     uf: "",
-                    fatura: faturaFromMotorista(i),
                   };
                   if (i.placa) {
                     const v =
@@ -832,10 +884,56 @@ export function ReceiptOrderModal({
               {transporte.motorista.trim() ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4 text-sm">
                   <div className="grid sm:grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Fatura</p>
-                      <p className="font-semibold text-slate-900 mt-0.5">{transporte.fatura || "—"}</p>
-                      <p className="text-xs text-slate-500 mt-1">Preenchida com o nome do motorista (padrão do espelho).</p>
+                    <div className="sm:col-span-2">
+                      <p className={labelClass}>Quem paga a fatura no espelho?</p>
+                      <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                        <label
+                          className={`flex-1 flex items-start gap-2 p-3 rounded-xl border-2 cursor-pointer transition ${
+                            faturaParte === "remetente"
+                              ? "border-emerald-500 bg-emerald-50/80"
+                              : "border-slate-200 hover:border-slate-300"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="fatura-parte"
+                            className="mt-0.5"
+                            checked={faturaParte === "remetente"}
+                            onChange={() => setFaturaParte("remetente")}
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-xs font-bold text-slate-600 uppercase">Remetente</span>
+                            <span className="block text-sm font-semibold text-slate-900 truncate">
+                              {remetente.nome.trim() || "— preencha no passo 1"}
+                            </span>
+                          </span>
+                        </label>
+                        <label
+                          className={`flex-1 flex items-start gap-2 p-3 rounded-xl border-2 cursor-pointer transition ${
+                            faturaParte === "destinatario"
+                              ? "border-emerald-500 bg-emerald-50/80"
+                              : "border-slate-200 hover:border-slate-300"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="fatura-parte"
+                            className="mt-0.5"
+                            checked={faturaParte === "destinatario"}
+                            onChange={() => setFaturaParte("destinatario")}
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-xs font-bold text-slate-600 uppercase">Destinatário</span>
+                            <span className="block text-sm font-semibold text-slate-900 truncate">
+                              {destinatario.nome.trim() || "— preencha no passo 2"}
+                            </span>
+                          </span>
+                        </label>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-2">
+                        No espelho impresso, o campo <strong>Fatura</strong> mostrará:{" "}
+                        <strong>{transporte.fatura || "—"}</strong>
+                      </p>
                     </div>
                     <div>
                       <label className={labelClass} htmlFor="espelho-agente">

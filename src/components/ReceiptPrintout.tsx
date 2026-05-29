@@ -83,9 +83,7 @@ export function ReceiptPrintout({
 
   const issuedAt = receipt.created_at ? new Date(receipt.created_at) : new Date();
 
-  const faturaNome = isBlank
-    ? ""
-    : receipt.fatura_nome?.trim() || receipt.motorista_nome?.trim() || "";
+  const faturaNome = isBlank ? "" : receipt.fatura_nome?.trim() || "";
   const agenteNome = isBlank ? "" : receipt.agente_nome?.trim() || "";
 
   const logoSrc = company.logo_base64 || SITE_LOGO_URL;
