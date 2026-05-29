@@ -44,8 +44,10 @@ O domínio precisa apontar (DNS A) para o IP do servidor e a porta **80** estar 
 
 ```bash
 sudo ./install.sh --reconfigure
-# ou, se não aparecer pergunta:
-sudo -t ./install.sh --reconfigure
+# ou:
+sudo MAF_RECONFIGURE=1 ./install.sh
+# terminal sem TTY:
+sudo -t bash ./install.sh --reconfigure
 ```
 
 Enter mantém o valor atual; digite um valor novo para alterar.
@@ -81,6 +83,15 @@ Isso clona em `/var/www/maf-recibos` e executa a instalação.
 | `SKIP_CERTBOT=1` | Só HTTP, sem HTTPS |
 
 ---
+
+## Só Docker + site (banco já configurado)
+
+```bash
+cd /var/www/maf-recibos
+sudo ./install.sh --app-only
+```
+
+Equivale a `docker compose … up -d --build`, `curl` no `/api/health`, Nginx e Certbot.
 
 ## Atualizar versão
 

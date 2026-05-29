@@ -17,6 +17,9 @@
 #   MAF_INSTALL_DIR     — padrão /var/www/maf-recibos
 #   SKIP_CERTBOT=1      — só HTTP, sem HTTPS
 #   SKIP_NGINX=1        — não configura Nginx
+#   sudo ./install.sh --reconfigure   (perguntas de novo; Enter = manter .env)
+#   sudo ./install.sh --app-only        (só Docker + Nginx + Certbot; banco já OK)
+#   Não use: sudo -t ./install.sh --reconfigure (sudo trata --reconfigure como opção dele)
 # =============================================================================
 set -euo pipefail
 
@@ -521,27 +524,34 @@ init_tables() {
 deploy_app() {
   load_env
   local host_port="${MAF_HOST_PORT:-3010}"
+  local health_url="http://127.0.0.1:${host_port}/api/health"
 
-  if ! port_listening "$host_port" || ! app_healthy_on_port "$host_port"; then
-    if port_listening "$host_port" && ! app_healthy_on_port "$host_port"; then
-      die "Porta ${host_port} ocupada por outro serviço. Ajuste MAF_HOST_PORT no .env"
-    fi
-    log "Build e container Docker (porta ${host_port})..."
-    docker compose -f docker-compose.prod.yml up -d --build
-  else
-    log "App já rodando na porta ${host_port} — rebuild..."
-    docker compose -f docker-compose.prod.yml up -d --build
+  log "=== Docker (app em produção) ==="
+  echo "  cd ${ROOT}"
+  echo "  docker compose -f docker-compose.prod.yml up -d --build"
+
+  if port_listening "$host_port" && ! app_healthy_on_port "$host_port"; then
+    die "Porta ${host_port} ocupada por outro serviço. Ajuste MAF_HOST_PORT no .env"
   fi
 
-  local i
-  for i in $(seq 1 15); do
-    if app_healthy_on_port "$host_port"; then
-      ok "App: http://127.0.0.1:${host_port}/api/health"
+  log "Build e container..."
+  docker compose -f docker-compose.prod.yml up -d --build
+
+  log "Aguardando health check (${health_url})..."
+  local i body
+  for i in $(seq 1 20); do
+    if body="$(curl -sf "$health_url" 2>/dev/null)"; then
+      ok "App respondendo: ${health_url}"
+      echo "  ${body}"
       return 0
     fi
-    sleep 2
+    sleep 3
   done
-  warn "Health check demorou — veja: docker compose -f docker-compose.prod.yml logs -f"
+
+  warn "Health check não respondeu a tempo."
+  echo "  Teste: curl -s ${health_url}"
+  echo "  Logs:  docker compose -f docker-compose.prod.yml logs -f"
+  return 1
 }
 
 # =============================================================================
@@ -622,11 +632,27 @@ setup_certbot() {
 # Main
 # =============================================================================
 
-main() {
-  if [[ "${1:-}" == "--reconfigure" ]]; then
-    MAF_RECONFIGURE=1
-    shift
+deploy_app_and_web() {
+  deploy_app || die "Docker/health falhou — corrija e rode: sudo ./install.sh --app-only"
+  if [[ "${SKIP_NGINX:-0}" != "1" ]]; then
+    write_nginx_site
+    setup_certbot
   fi
+}
+
+main() {
+  local app_only=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --reconfigure) MAF_RECONFIGURE=1; shift ;;
+      --app-only) app_only=1; shift ;;
+      -h|--help)
+        echo "Uso: sudo ./install.sh [--reconfigure] [--app-only]"
+        exit 0
+        ;;
+      *) die "Opção desconhecida: $1 (use --help)" ;;
+    esac
+  done
 
   echo ""
   echo "╔══════════════════════════════════════════════════════════╗"
@@ -636,16 +662,18 @@ main() {
 
   [[ -f package-lock.json ]] || die "Execute na pasta do projeto (git clone …/maf-recibos)"
 
-  install_system_deps
-  ensure_env
-  load_env
-  setup_postgres
-  init_tables
-  deploy_app
-
-  if [[ "${SKIP_NGINX:-0}" != "1" ]]; then
-    write_nginx_site
-    setup_certbot
+  if [[ "$app_only" -eq 1 ]]; then
+    log "Modo --app-only (Docker + Nginx + Certbot)"
+    [[ -f .env ]] || die "Falta .env — rode ./install.sh completo antes"
+    load_env
+    deploy_app_and_web
+  else
+    install_system_deps
+    ensure_env
+    load_env
+    setup_postgres
+    init_tables
+    deploy_app_and_web
   fi
 
   load_env
