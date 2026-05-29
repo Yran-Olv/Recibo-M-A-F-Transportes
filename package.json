@@ -10,6 +10,7 @@
     "dev:no-watch": "DISABLE_HMR=true tsx server.ts",
     "db:up": "docker compose up -d postgres",
     "db:init": "tsx scripts/init-database.ts",
+    "admin:reset-password": "tsx scripts/reset-admin-password.ts",
     "db:setup": "npm run db:up && sleep 4 && npm run db:init",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "NODE_ENV=production node dist/server.cjs",
