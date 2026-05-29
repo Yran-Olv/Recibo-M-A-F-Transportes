@@ -1,0 +1,14 @@
+node_modules/
+dist/
+db.json
+backups/*
+!backups/.gitkeep
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.production.example
+*.log
+.DS_Store
+.cursor/
+terminals/

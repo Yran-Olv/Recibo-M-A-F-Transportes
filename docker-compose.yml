@@ -1,0 +1,24 @@
+# Desenvolvimento local: PostgreSQL em Docker na porta 5434 (não conflita com 5432 do servidor).
+# Produção: use docker-compose.prod.yml + PostgreSQL nativo no host — veja docs/DEPLOY-PRODUCAO.md
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: maf-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PGUSER:-maf_user}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-maf_dev_only}
+      POSTGRES_DB: ${PGDATABASE:-maf_recibos}
+    ports:
+      - "5434:5432"
+    volumes:
+      - maf_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-maf_user} -d ${PGDATABASE:-maf_recibos}"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  maf_pg_data:

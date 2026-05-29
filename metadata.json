@@ -1,0 +1,6 @@
+{
+  "name": "M.A.F Espelho de Frete",
+  "description": "Emissão de espelhos de frete/viagem M.A.F com impressão A4, catálogos e histórico.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

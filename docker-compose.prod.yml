@@ -1,0 +1,46 @@
+# Produção: só a aplicação em Docker.
+# PostgreSQL fica no servidor (instalação nativa) — não publicamos porta do PG aqui.
+#
+# Preferível: ./scripts/deploy.sh (faz build, banco e sobe o container)
+# Manual: docker compose -f docker-compose.prod.yml up -d --build
+#
+# Nginx no host aponta para 127.0.0.1:${MAF_HOST_PORT}
+
+services:
+  maf-recibos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: maf-recibos:latest
+    container_name: maf-recibos
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      # Dentro do container, PostgreSQL no host Linux:
+      PGHOST: ${PGHOST:-host.docker.internal}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      # Só localhost — Nginx/Certbot no host faz o HTTPS público
+      - "127.0.0.1:${MAF_HOST_PORT:-3010}:3000"
+    volumes:
+      - maf_backups:/app/backups
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-qO-",
+          "http://127.0.0.1:3000/api/health",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  maf_backups:

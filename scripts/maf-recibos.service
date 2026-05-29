@@ -1,0 +1,27 @@
+[Unit]
+Description=M.A.F Espelho de Frete (Node.js)
+Documentation=file:///opt/maf-recibos/docs/DEPLOY-PRODUCAO.md
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=maf
+Group=maf
+WorkingDirectory=/opt/maf-recibos
+EnvironmentFile=/opt/maf-recibos/.env
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+# PORT e credenciais PG vêm do .env
+ExecStart=/usr/bin/node /opt/maf-recibos/dist/server.cjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=maf-recibos
+
+[Install]
+WantedBy=multi-user.target
