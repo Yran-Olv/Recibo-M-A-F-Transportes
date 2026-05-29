@@ -31,6 +31,31 @@ ok()   { echo "✓ $*"; }
 warn() { echo "⚠ $*"; }
 die()  { echo "✗ $*" >&2; exit 1; }
 
+# sudo costuma fechar stdin — ler do terminal real
+has_tty() {
+  [[ -t 0 ]] || [[ -r /dev/tty ]]
+}
+
+read_tty() {
+  local __var="$1" __prompt="$2" __secret="${3:-0}" __input=""
+  if [[ "$__secret" == "1" ]]; then
+    if [[ -r /dev/tty ]]; then
+      read -rsp "$__prompt" __input </dev/tty
+      echo "" >/dev/tty
+    else
+      read -rsp "$__prompt" __input
+      echo ""
+    fi
+  else
+    if [[ -r /dev/tty ]]; then
+      read -rp "$__prompt" __input </dev/tty
+    else
+      read -rp "$__prompt" __input
+    fi
+  fi
+  printf -v "$__var" '%s' "$__input"
+}
+
 as_root() {
   if [[ "${EUID:-0}" -eq 0 ]]; then "$@"; else sudo "$@"; fi
 }
@@ -251,12 +276,45 @@ prompt_if_empty() {
     eval "$var_name=\$current"
     return 0
   fi
-  if [[ -t 0 ]]; then
-    read -rp "$prompt_text${default:+ [$default]}: " input
+  if has_tty; then
+    read_tty input "${prompt_text}${default:+ [$default]}: " 0
     input="${input:-$default}"
     eval "$var_name=\$input"
   elif [[ -n "$default" ]]; then
     eval "$var_name=\$default"
+  fi
+}
+
+# Enter = mantém valor do .env; digite novo para alterar
+prompt_env_keep_or_change() {
+  local var_name="$1" prompt_text="$2" is_secret="${3:-0}"
+  local current="${!var_name:-}"
+  current="$(get_env_var "$var_name")"
+  if ! env_value_is_real "$current"; then
+    current=""
+  fi
+  if ! has_tty; then
+    [[ -n "$current" ]] && eval "$var_name=\$current"
+    return 0
+  fi
+  local input=""
+  if [[ "$is_secret" == "1" ]]; then
+    if [[ -n "$current" ]]; then
+      read_tty input "${prompt_text} [Enter = manter atual]: " 1
+    else
+      read_tty input "${prompt_text}: " 1
+    fi
+  else
+    if [[ -n "$current" ]]; then
+      read_tty input "${prompt_text} [${current}] (Enter = manter): " 0
+    else
+      read_tty input "${prompt_text}: " 0
+    fi
+  fi
+  if [[ -n "$input" ]]; then
+    eval "$var_name=\$input"
+  elif [[ -n "$current" ]]; then
+    eval "$var_name=\$current"
   fi
 }
 
@@ -265,6 +323,10 @@ ensure_env() {
     [[ -f .env.production.example ]] || die "Falta .env.production.example"
     log "Criando .env..."
     cp .env.production.example .env
+  fi
+
+  if [[ "${MAF_RECONFIGURE:-0}" == "1" ]]; then
+    warn "Modo --reconfigure: confirme ou altere cada valor (Enter = manter)."
   fi
 
   local secret
@@ -276,38 +338,38 @@ ensure_env() {
 
   echo ""
   log "Site público (Nginx + HTTPS)"
-  DOMAIN="${DOMAIN:-$(get_env_var DOMAIN)}"
-  CERTBOT_EMAIL="${CERTBOT_EMAIL:-$(get_env_var CERTBOT_EMAIL)}"
-  if ! env_value_is_real "$DOMAIN"; then DOMAIN=""; fi
-  if ! env_value_is_real "$CERTBOT_EMAIL"; then CERTBOT_EMAIL=""; fi
-  prompt_if_empty DOMAIN "Domínio (ex. recibos.minhaempresa.com.br)"
-  prompt_if_empty CERTBOT_EMAIL "E-mail para Certbot / Let's Encrypt"
+  DOMAIN="${DOMAIN:-}"
+  CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
+  if [[ "${MAF_RECONFIGURE:-0}" == "1" ]] || has_tty; then
+    prompt_env_keep_or_change DOMAIN "Domínio (ex. recibos.minhaempresa.com.br)"
+    prompt_env_keep_or_change CERTBOT_EMAIL "E-mail Certbot / Let's Encrypt"
+  else
+    DOMAIN="$(get_env_var DOMAIN)"
+    CERTBOT_EMAIL="$(get_env_var CERTBOT_EMAIL)"
+    prompt_if_empty DOMAIN "Domínio"
+    prompt_if_empty CERTBOT_EMAIL "E-mail Certbot"
+  fi
   [[ -n "$DOMAIN" ]] && set_env_var DOMAIN "$DOMAIN"
   [[ -n "$CERTBOT_EMAIL" ]] && set_env_var CERTBOT_EMAIL "$CERTBOT_EMAIL"
   [[ -n "$DOMAIN" ]] && set_env_var APP_URL "https://${DOMAIN}"
   echo ""
 
   log "Senhas do sistema"
-  DB_PASS="${DB_PASS:-$(get_env_var PGPASSWORD)}"
+  DB_PASS="${DB_PASS:-}"
+  ADMIN_INITIAL_PASSWORD="${ADMIN_INITIAL_PASSWORD:-}"
+  if [[ "${MAF_RECONFIGURE:-0}" == "1" ]] || has_tty; then
+    prompt_env_keep_or_change DB_PASS "Senha PostgreSQL (usuário maf_user)" 1
+    prompt_env_keep_or_change ADMIN_INITIAL_PASSWORD "Senha login admin do sistema" 1
+  else
+    DB_PASS="${DB_PASS:-$(get_env_var PGPASSWORD)}"
+    ADMIN_INITIAL_PASSWORD="${ADMIN_INITIAL_PASSWORD:-$(get_env_var ADMIN_INITIAL_PASSWORD)}"
+  fi
   if [[ -z "$DB_PASS" ]]; then
-    if [[ -t 0 ]]; then
-      read -rsp "Senha PostgreSQL (usuário maf_user): " DB_PASS
-      echo ""
-    else
-      DB_PASS="$(random_password)"
-      warn "Senha PostgreSQL gerada automaticamente (salva no .env)"
-    fi
+    DB_PASS="$(random_password)"
+    warn "Senha PostgreSQL gerada (salva no .env)"
   fi
   set_env_var PGPASSWORD "$DB_PASS"
-
-  ADMIN_INITIAL_PASSWORD="${ADMIN_INITIAL_PASSWORD:-$(get_env_var ADMIN_INITIAL_PASSWORD)}"
-  if [[ -z "$ADMIN_INITIAL_PASSWORD" ]]; then
-    if [[ -t 0 ]]; then
-      read -rsp "Senha do admin do sistema [admin123]: " ADMIN_INITIAL_PASSWORD
-      echo ""
-    fi
-    ADMIN_INITIAL_PASSWORD="${ADMIN_INITIAL_PASSWORD:-admin123}"
-  fi
+  ADMIN_INITIAL_PASSWORD="${ADMIN_INITIAL_PASSWORD:-admin123}"
   set_env_var ADMIN_INITIAL_PASSWORD "$ADMIN_INITIAL_PASSWORD"
 
   set_env_var NODE_ENV "production"
@@ -335,6 +397,27 @@ postgres_can_connect() {
     -d "${PGDATABASE:-maf_recibos}" -c "SELECT 1" &>/dev/null
 }
 
+postgres_wrong_owner_count() {
+  local db_name="$1"
+  local db_user="$2"
+  run_as_postgres psql -d "$db_name" -tAc \
+    "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public' AND tableowner IS DISTINCT FROM '${db_user}'" \
+    | tr -d '[:space:]'
+}
+
+postgres_reset_public_schema() {
+  local db_name="$1"
+  local db_user="$2"
+  warn "Recriando banco (schema public) — tabelas passam a ser do usuário ${db_user}."
+  run_as_postgres psql -d "$db_name" -v ON_ERROR_STOP=1 <<SQL
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public AUTHORIZATION ${db_user};
+GRANT ALL ON SCHEMA public TO ${db_user};
+GRANT USAGE ON SCHEMA public TO public;
+SQL
+  ok "Schema public recriado (vazio, pronto para init-database)"
+}
+
 postgres_fix_ownership() {
   local db_name="$1"
   local db_user="$2"
@@ -347,6 +430,12 @@ GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${db_user};
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${db_user};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${db_user};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${db_user};
+REASSIGN OWNED BY postgres TO ${db_user};
+DO \$\$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'yrandev') THEN
+    EXECUTE 'REASSIGN OWNED BY yrandev TO ${db_user}';
+  END IF;
+END \$\$;
 DO \$\$
 DECLARE r RECORD;
 BEGIN
@@ -359,7 +448,15 @@ BEGIN
 END
 \$\$;
 SQL
-  ok "Permissões PostgreSQL (${db_user} é dono das tabelas)"
+
+  local wrong
+  wrong="$(postgres_wrong_owner_count "$db_name" "$db_user")"
+  if [[ "${wrong:-0}" -gt 0 ]]; then
+    warn "${wrong} tabela(s) ainda não pertencem a ${db_user}."
+    postgres_reset_public_schema "$db_name" "$db_user"
+  else
+    ok "Permissões PostgreSQL (${db_user} é dono das tabelas)"
+  fi
 }
 
 setup_postgres() {
@@ -405,11 +502,15 @@ SQL
 
 init_tables() {
   load_env
+  local db_name="${PGDATABASE:-maf_recibos}"
+  local db_user="${PGUSER:-maf_user}"
+  postgres_fix_ownership "$db_name" "$db_user"
+
   log "Tabelas do sistema..."
   npm ci
-  # PostgreSQL no host Linux — não usar host.docker.internal aqui
-  PGHOST=127.0.0.1 npx tsx scripts/init-database.ts
   rm -f "${ROOT}/db.json"
+  # PostgreSQL no host; sem fallback para db.json durante instalação
+  INIT_DB_STRICT=1 PGHOST=127.0.0.1 npx tsx scripts/init-database.ts
   ok "Banco de dados inicializado (PostgreSQL)"
 }
 
@@ -522,6 +623,11 @@ setup_certbot() {
 # =============================================================================
 
 main() {
+  if [[ "${1:-}" == "--reconfigure" ]]; then
+    MAF_RECONFIGURE=1
+    shift
+  fi
+
   echo ""
   echo "╔══════════════════════════════════════════════════════════╗"
   echo "║  M.A.F Espelho de Frete — instalação em produção         ║"

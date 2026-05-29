@@ -399,6 +399,9 @@ export async function initDb() {
       }
       await ensureDefaultAdmin();
     } catch (err) {
+      if (process.env.INIT_DB_STRICT === "1") {
+        throw err;
+      }
       console.error("PostgreSQL connection error during initialization. Falling back to Local JSON database mode.", err);
       isPostgresActive = false;
     }

@@ -27,7 +27,11 @@ async function main() {
   }
 
   console.log("\n✓ PostgreSQL ativo — tabelas verificadas/criadas.");
-  console.log("  Inicie o site: npm run dev");
+  if (process.env.NODE_ENV === "production" || process.env.INIT_DB_STRICT === "1") {
+    console.log("  Produção: o install.sh segue com Docker e Nginx (não use npm run dev no servidor).");
+  } else {
+    console.log("  Desenvolvimento local: npm run dev");
+  }
 }
 
 main().catch((err) => {

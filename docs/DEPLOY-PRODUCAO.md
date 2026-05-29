@@ -40,6 +40,16 @@ sudo DOMAIN=recibos.seudominio.com.br \
 
 O domínio precisa apontar (DNS A) para o IP do servidor e a porta **80** estar aberta no firewall antes do Certbot.
 
+## Perguntas no terminal (já tem `.env`)
+
+```bash
+sudo ./install.sh --reconfigure
+# ou, se não aparecer pergunta:
+sudo -t ./install.sh --reconfigure
+```
+
+Enter mantém o valor atual; digite um valor novo para alterar.
+
 ---
 
 ## Primeira vez (ainda sem o código)
