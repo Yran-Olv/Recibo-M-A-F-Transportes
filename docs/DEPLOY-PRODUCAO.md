@@ -106,7 +106,7 @@ sudo ./update.sh
 
 Ou: `npm run update:prod`
 
-O `update.sh` faz:
+O `update.sh` faz (após o `git pull` **reinicia sozinho** para usar a versão nova do script):
 
 1. `git pull` do GitHub
 2. Novas chaves do `.env.production.example` → `.env` (só as que faltam)

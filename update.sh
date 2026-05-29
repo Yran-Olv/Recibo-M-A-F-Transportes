@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
 # =============================================================================
-# M.A.F — Atualização em produção (sem reinstalar tudo)
+# M.A.F — Atualização em produção
 #
 #   cd /var/www/maf-recibos && sudo ./update.sh
 #
-# Faz: git pull → dependências → migrações PostgreSQL → rebuild Docker → health
+#   git pull → npm ci → migrações PostgreSQL → Docker rebuild → Nginx
 #
-# Variáveis opcionais:
-#   MAF_BRANCH=main          branch do git pull
-#   SKIP_GIT=1               não faz git pull
-#   SKIP_NGINX=1             não recarrega Nginx
-#   SKIP_MIGRATE=1           não roda migrações
+# Após o git pull o script reinicia a si mesmo (para usar a versão nova do update.sh).
+#
+#   SKIP_GIT=1 | SKIP_MIGRATE=1 | SKIP_NGINX=1 | MAF_BRANCH=main
 # =============================================================================
 set -euo pipefail
 
@@ -22,6 +20,8 @@ log()  { echo "==> $*"; }
 ok()   { echo "✓ $*"; }
 warn() { echo "⚠ $*" >&2; }
 die()  { echo "✗ $*" >&2; exit 1; }
+
+trap 'die "Falha na linha ${LINENO} (código $?)"' ERR
 
 as_root() {
   if [[ "${EUID:-0}" -eq 0 ]]; then "$@"; else sudo "$@"; fi
@@ -65,14 +65,15 @@ repair_env_file() {
 load_env() {
   repair_env_file
   set -a
-  # shellcheck disable=SC1091
-  source .env
+  if ! source .env 2>/dev/null; then
+    die "Erro ao ler .env (sintaxe inválida). Corrija o arquivo e rode de novo."
+  fi
   set +a
 }
 
 merge_new_env_keys() {
   [[ -f .env.production.example ]] || return 0
-  local added=0 key line val
+  local added=0 key line
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
     [[ "$line" =~ ^[[:space:]]*$ ]] && continue
@@ -81,13 +82,14 @@ merge_new_env_keys() {
     key="${key// /}"
     [[ -z "$key" ]] && continue
     if ! grep -q "^${key}=" .env 2>/dev/null; then
-      val="${line#*=}"
-      echo "${key}=${val}" >>.env
-      warn "Nova chave no .env (do example): ${key}"
+      echo "${line}" >>.env
+      warn "Nova chave no .env: ${key}"
       added=$((added + 1))
     fi
   done <.env.production.example
-  [[ "$added" -gt 0 ]] && ok "${added} chave(s) adicionada(s) ao .env (revise o arquivo)"
+  if [[ "$added" -gt 0 ]]; then
+    ok "${added} chave(s) novas copiadas do .env.production.example"
+  fi
 }
 
 is_maf_health() {
@@ -97,81 +99,93 @@ is_maf_health() {
 }
 
 git_update() {
-  [[ "${SKIP_GIT:-0}" == "1" ]] && { warn "SKIP_GIT=1 — pulando git pull"; return 0; }
+  if [[ "${SKIP_GIT:-0}" == "1" ]]; then
+    warn "SKIP_GIT=1 — pulando git pull"
+    return 0
+  fi
   command -v git &>/dev/null || die "git não instalado"
+  [[ -d .git ]] || die "Pasta não é um repositório git"
 
-  if [[ ! -d .git ]]; then
-    die "Pasta não é um repositório git"
-  fi
   if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-    warn "Existem alterações locais — git pull pode falhar"
+    warn "Há alterações locais — git pull pode falhar"
   fi
-  log "git pull (branch ${MAF_BRANCH})..."
+
+  log "Git: pull origin/${MAF_BRANCH}..."
   git fetch origin "$MAF_BRANCH" --quiet
   git pull --ff-only origin "$MAF_BRANCH"
-  ok "Código atualizado do GitHub"
+  ok "Código atualizado ($(git rev-parse --short HEAD))"
+
+  # O pull pode ter substituído este script — reinicia para executar a versão nova
+  if [[ "${MAF_UPDATE_REEXEC:-0}" != "1" ]]; then
+    log "Reiniciando update.sh (versão atualizada do repositório)..."
+    export MAF_UPDATE_REEXEC=1
+    export SKIP_GIT=1
+    exec bash "${ROOT}/update.sh"
+  fi
 }
 
 run_migrations() {
-  [[ "${SKIP_MIGRATE:-0}" == "1" ]] && { warn "SKIP_MIGRATE=1 — pulando migrações"; return 0; }
-
-  log "Dependências npm (para migrações)..."
-  npm ci --quiet 2>/dev/null || npm ci
-
-  log "Migrações / tabelas PostgreSQL (init-database.ts)..."
-  rm -f "${ROOT}/db.json"
-  if INIT_DB_STRICT=1 PGHOST=127.0.0.1 npx tsx scripts/init-database.ts; then
-    ok "Banco PostgreSQL atualizado"
-  else
-    die "Migração falhou — confira PGHOST=127.0.0.1 e PGPASSWORD no .env"
+  if [[ "${SKIP_MIGRATE:-0}" == "1" ]]; then
+    warn "SKIP_MIGRATE=1 — pulando migrações"
+    return 0
   fi
+
+  log "=== Banco de dados (migrações) ==="
+  log "npm ci..."
+  npm ci
+
+  log "init-database.ts (cria/altera tabelas PostgreSQL)..."
+  rm -f "${ROOT}/db.json"
+  INIT_DB_STRICT=1 PGHOST=127.0.0.1 npx tsx scripts/init-database.ts
+  ok "PostgreSQL migrado"
 }
 
 docker_redeploy() {
+  log "=== Docker ==="
   load_env
   local host_port="${MAF_HOST_PORT:-3010}"
-  [[ "$host_port" =~ ^[0-9]+$ ]] || die "MAF_HOST_PORT inválido no .env"
+  [[ "$host_port" =~ ^[0-9]+$ ]] || die "MAF_HOST_PORT inválido no .env: ${host_port}"
 
-  if ! command -v docker &>/dev/null; then
-    die "Docker não encontrado"
-  fi
+  command -v docker &>/dev/null || die "Docker não instalado"
 
-  log "Rebuild e reinício do container (porta ${host_port})..."
+  log "docker compose -f docker-compose.prod.yml up -d --build"
   docker compose -f docker-compose.prod.yml up -d --build
 
   local health_url="http://127.0.0.1:${host_port}/api/health"
   log "Health check: ${health_url}"
-  local i
+  local i body
   for i in $(seq 1 25); do
-    if is_maf_health "$host_port"; then
-      ok "M.A.F online"
-      curl -sf --max-time 5 "$health_url" 2>/dev/null | head -c 200
-      echo ""
+    if body="$(curl -sf --max-time 5 "$health_url" 2>/dev/null)" && echo "$body" | grep -qE '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+      ok "Container M.A.F online na porta ${host_port}"
+      echo "  ${body}"
       return 0
     fi
     sleep 2
   done
 
-  warn "Health check falhou — logs:"
-  docker compose -f docker-compose.prod.yml logs --tail 40
-  die "Container não respondeu como M.A.F em ${host_port}"
+  docker compose -f docker-compose.prod.yml logs --tail 50
+  die "Health check falhou em ${host_port}"
 }
 
 reload_nginx_if_needed() {
-  [[ "${SKIP_NGINX:-0}" == "1" ]] && return 0
+  if [[ "${SKIP_NGINX:-0}" == "1" ]]; then
+    warn "SKIP_NGINX=1 — pulando Nginx"
+    return 0
+  fi
+
+  log "=== Nginx ==="
   load_env
   local port="${MAF_HOST_PORT:-3010}"
-  command -v nginx &>/dev/null || return 0
+  command -v nginx &>/dev/null || { warn "nginx não instalado"; return 0; }
 
   local site="/etc/nginx/sites-available/maf-recibos"
-  [[ -f "$site" ]] || { warn "Nginx maf-recibos não encontrado — pulando"; return 0; }
+  [[ -f "$site" ]] || { warn "Arquivo ${site} não existe — pulando"; return 0; }
 
-  log "Nginx: upstream → 127.0.0.1:${port} (mantém HTTPS do Certbot se existir)..."
   as_root sed -i "s|server 127.0.0.1:[0-9][0-9]*|server 127.0.0.1:${port}|g" "$site"
   as_root sed -i "s|proxy_pass http://127.0.0.1:[0-9][0-9]*|proxy_pass http://127.0.0.1:${port}|g" "$site"
   as_root nginx -t
   as_root systemctl reload nginx
-  ok "Nginx recarregado"
+  ok "Nginx recarregado (upstream porta ${port})"
 }
 
 main() {
@@ -181,8 +195,8 @@ main() {
   echo "╚══════════════════════════════════════════════════════════╝"
   echo ""
 
-  [[ -f package-lock.json ]] || die "Execute na pasta do projeto"
-  [[ -f .env ]] || die "Falta .env — use sudo ./install.sh primeiro"
+  [[ -f package-lock.json ]] || die "Execute na pasta do projeto (/var/www/maf-recibos)"
+  [[ -f .env ]] || die "Falta .env — rode sudo ./install.sh primeiro"
 
   repair_env_file
   git_update
@@ -196,7 +210,7 @@ main() {
   echo ""
   echo "══════════════════════════════════════════════════════════"
   ok "Atualização concluída"
-  echo "  Código:     $(git rev-parse --short HEAD 2>/dev/null || echo '?')"
+  echo "  Commit:     $(git rev-parse --short HEAD 2>/dev/null || echo '?')"
   echo "  Health:     http://127.0.0.1:${MAF_HOST_PORT}/api/health"
   [[ -n "${DOMAIN:-}" ]] && echo "  Site:       https://${DOMAIN}"
   echo "══════════════════════════════════════════════════════════"
