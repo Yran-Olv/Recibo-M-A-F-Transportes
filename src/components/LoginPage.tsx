@@ -53,7 +53,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             showText={false}
             imgClassName="h-24 w-auto max-w-[300px] object-contain drop-shadow-lg mb-4"
           />
-          <h1 className="text-2xl font-bold text-white">M.A.F F Transportes</h1>
+          <h1 className="text-2xl font-bold text-white">M.A.F Transportes</h1>
           <p className="text-slate-400 text-sm mt-1">{SITE_TAGLINE}</p>
         </div>
 
