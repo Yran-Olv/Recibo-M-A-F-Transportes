@@ -67,47 +67,66 @@ async function captureReceiptElement(el: HTMLElement): Promise<HTMLCanvasElement
   }
 }
 
-function printPdfBlob(pdf: jsPDF, fileName: string): void {
-  const blob = pdf.output("blob");
-  const url = URL.createObjectURL(blob);
-
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.title = fileName;
-  iframe.style.cssText =
-    "position:fixed;width:0;height:0;border:0;clip:rect(0,0,0,0);overflow:hidden;";
-  iframe.src = url;
-  document.body.appendChild(iframe);
-
-  let done = false;
-  const cleanup = () => {
-    if (done) return;
-    done = true;
-    iframe.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  const startPrint = () => {
-    const win = iframe.contentWindow;
-    if (!win) {
-      cleanup();
-      pdf.save(`${fileName}.pdf`);
-      return;
-    }
-    win.addEventListener("afterprint", cleanup, { once: true });
-    setTimeout(cleanup, 120_000);
-    win.focus();
-    win.print();
-  };
-
-  iframe.addEventListener("load", startPrint, { once: true });
-  setTimeout(() => {
-    if (!done) startPrint();
-  }, 4000);
+/** Baixa o PDF (sempre funciona, inclusive com CSP restritivo). */
+function downloadPdf(pdf: jsPDF, fileName: string): void {
+  pdf.save(`${fileName}.pdf`);
 }
 
 /**
- * Gera PDF do espelho e abre a impressão — evita URL/data/hora do navegador no HTML.
+ * Abre o PDF em nova aba e chama impressão.
+ * Evita iframe + blob: (bloqueado por CSP em produção).
+ */
+function printPdfBlob(pdf: jsPDF, fileName: string): void {
+  const blob = pdf.output("blob");
+  const url = URL.createObjectURL(blob);
+  const safeName = `${fileName}.pdf`;
+
+  const revokeLater = () => {
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  };
+
+  const popup = window.open(url, "_blank", "noopener,noreferrer");
+  if (!popup) {
+    URL.revokeObjectURL(url);
+    downloadPdf(pdf, fileName);
+    window.alert(
+      "Não foi possível abrir a janela de impressão (pop-up bloqueado).\n\n" +
+        "O PDF foi baixado — abra o arquivo e use Imprimir no leitor de PDF."
+    );
+    return;
+  }
+
+  let printed = false;
+  const triggerPrint = () => {
+    if (printed) return;
+    printed = true;
+    try {
+      popup.focus();
+      popup.print();
+    } catch {
+      downloadPdf(pdf, fileName);
+      window.alert(
+        "Abra o PDF na nova aba e use Ctrl+P (ou Imprimir).\n\n" +
+          "Desmarque «Cabeçalhos e rodapés» na impressora."
+      );
+    }
+    revokeLater();
+  };
+
+  try {
+    popup.addEventListener("load", () => setTimeout(triggerPrint, 800), { once: true });
+  } catch {
+    /* cross-origin em alguns navegadores — usa timeout */
+  }
+
+  setTimeout(triggerPrint, 1500);
+  setTimeout(() => {
+    if (!printed) triggerPrint();
+  }, 3500);
+}
+
+/**
+ * Gera PDF do espelho e abre a impressão — sem URL/data do site no documento.
  */
 export async function printReceiptDocument(
   elementId = "print-document",

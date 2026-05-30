@@ -70,7 +70,27 @@ async function startServer() {
 
   app.use(
     helmet({
-      contentSecurityPolicy: process.env.NODE_ENV === "production",
+      contentSecurityPolicy:
+        process.env.NODE_ENV === "production"
+          ? {
+              directives: {
+                defaultSrc: ["'self'"],
+                scriptSrc: ["'self'"],
+                styleSrc: ["'self'", "'unsafe-inline'"],
+                imgSrc: ["'self'", "data:", "blob:"],
+                fontSrc: ["'self'", "data:"],
+                connectSrc: ["'self'"],
+                /** PDF do espelho: nova aba / visualizador (blob:) */
+                frameSrc: ["'self'", "blob:"],
+                childSrc: ["'self'", "blob:"],
+                objectSrc: ["'self'", "blob:"],
+                workerSrc: ["'self'", "blob:"],
+                baseUri: ["'self'"],
+                formAction: ["'self'"],
+                frameAncestors: ["'self'"],
+              },
+            }
+          : false,
       crossOriginEmbedderPolicy: false,
     })
   );
