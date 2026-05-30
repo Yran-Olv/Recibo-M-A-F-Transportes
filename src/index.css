@@ -59,15 +59,33 @@ html.modal-open body {
   word-break: break-word;
 }
 
+.receipt-print-root .receipt-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.receipt-print-root .receipt-table td,
+.receipt-print-root .receipt-table th {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Pré-visualização na tela: contraste forte, sem cinza claro */
+.receipt-print-root {
+  color: #000;
+  background: #fff;
+}
+
 @page {
   size: A4 portrait;
-  margin: 12mm 14mm;
+  margin: 10mm 12mm;
 }
 
 @media print {
   @page {
     size: A4 portrait;
-    margin: 12mm 14mm;
+    margin: 10mm 12mm;
   }
 
   html,
@@ -77,9 +95,11 @@ html.modal-open body {
     background: #fff !important;
     overflow: visible !important;
     height: auto !important;
+    max-height: none !important;
   }
 
-  .no-print {
+  .no-print,
+  .receipt-screen-footer {
     display: none !important;
   }
 
@@ -122,27 +142,47 @@ html.modal-open body {
     top: 0 !important;
     right: 0 !important;
     width: 100% !important;
-    max-width: 182mm !important;
+    max-width: none !important;
     margin: 0 auto !important;
     padding: 0 !important;
     box-shadow: none !important;
     background: #fff !important;
     overflow: visible !important;
+    font-size: 14px !important;
+    line-height: 1.45 !important;
+    color: #000 !important;
   }
 
+  .receipt-print-root,
+  #print-document.receipt-print-root {
+    width: 100% !important;
+    max-width: 100% !important;
+    font-size: 14px !important;
+    line-height: 1.45 !important;
+  }
+
+  .receipt-print-root table,
   #print-document table {
     width: 100% !important;
     max-width: 100% !important;
     table-layout: fixed !important;
     border-collapse: collapse !important;
+    page-break-inside: avoid;
   }
 
+  .receipt-print-root td,
+  .receipt-print-root th,
   #print-document td,
   #print-document th {
     overflow-wrap: anywhere !important;
     word-break: break-word !important;
+    font-size: 14px !important;
+    padding: 7px 10px !important;
+    color: #000 !important;
+    border-color: #000 !important;
   }
 
+  .receipt-print-root img,
   #print-document img {
     max-width: 100% !important;
     height: auto !important;

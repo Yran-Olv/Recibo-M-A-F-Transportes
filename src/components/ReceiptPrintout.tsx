@@ -1,6 +1,6 @@
 import React from "react";
 import { Receipt, CompanyProfile } from "../types";
-import { formatBRL, formatDecimal, formatDateBR, formatDateTimeFooter } from "../utils/format";
+import { formatBRL, formatDecimal, formatDateBR } from "../utils/format";
 import { SITE_LOGO_URL } from "../constants/branding";
 import { formatCompanyAddressForPrint } from "../utils/companyAddress";
 
@@ -12,47 +12,67 @@ interface ReceiptPrintoutProps {
   printRootId?: string;
 }
 
+/** Estilos do espelho — fontes maiores para leitura e impressão A4 */
 const S = {
   doc: {
-    fontFamily: "Arial, Helvetica, sans-serif",
-    fontSize: "11px",
-    lineHeight: 1.35,
+    fontFamily: "Arial, Helvetica, 'Segoe UI', sans-serif",
+    fontSize: "13px",
+    lineHeight: 1.45,
     color: "#000",
     background: "#fff",
     boxSizing: "border-box" as const,
     width: "100%",
-    maxWidth: "182mm",
+    maxWidth: "190mm",
     margin: "0 auto",
     padding: "0",
   },
-  text: { fontSize: "11px" },
-  textSm: { fontSize: "10.5px" },
-  cell: { padding: "3px 5px", verticalAlign: "top" as const, fontSize: "11px" },
-  cellBox: {
-    padding: "3px 5px",
+  text: { fontSize: "13px", lineHeight: 1.45 },
+  textSm: { fontSize: "12px", lineHeight: 1.4 },
+  cell: {
+    padding: "6px 10px",
     verticalAlign: "top" as const,
+    fontSize: "13px",
+    lineHeight: 1.45,
+  },
+  cellBox: {
+    padding: "7px 10px",
+    verticalAlign: "middle" as const,
     border: "1px solid #000",
-    fontSize: "11px",
+    fontSize: "13px",
+    lineHeight: 1.45,
   },
   borderB: { borderBottom: "1px solid #000" },
   borderR: { borderRight: "1px solid #000" },
-  bold: { fontWeight: 700 },
+  bold: { fontWeight: 700, color: "#000" },
   title: {
     fontWeight: 700,
-    fontSize: "13px",
+    fontSize: "15px",
     textAlign: "center" as const,
     textDecoration: "underline",
     textTransform: "uppercase" as const,
-    padding: "6px 5px 5px",
+    padding: "8px 10px",
+    letterSpacing: "0.02em",
   },
   sectionTitle: {
     fontWeight: 700,
-    fontSize: "11.5px",
+    fontSize: "14px",
     textDecoration: "underline",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.02em",
   },
+  value: { fontWeight: 600, fontSize: "13.5px" },
 };
 
-/** Layout ESPELHO DE FRETE / VIAGEM — otimizado para impressão A4 sem cortar laterais */
+const COL_4 = (
+  <colgroup>
+    <col style={{ width: "25%" }} />
+    <col style={{ width: "25%" }} />
+    <col style={{ width: "25%" }} />
+    <col style={{ width: "25%" }} />
+  </colgroup>
+);
+
+/** Layout ESPELHO DE FRETE / VIAGEM — A4, legível, tabelas alinhadas */
 export function ReceiptPrintout({
   receipt,
   company,
@@ -81,8 +101,6 @@ export function ReceiptPrintout({
     (receipt.observacoes?.trim() ||
       (receipt.mercadoria_nota_fiscal ? `NF ${receipt.mercadoria_nota_fiscal}` : ""));
 
-  const issuedAt = receipt.created_at ? new Date(receipt.created_at) : new Date();
-
   const faturaNome = isBlank ? "" : receipt.fatura_nome?.trim() || "";
   const agenteNome = isBlank ? "" : receipt.agente_nome?.trim() || "";
 
@@ -91,18 +109,19 @@ export function ReceiptPrintout({
   return (
     <div
       {...(printRootId ? { id: printRootId } : {})}
-      className="receipt-a4"
+      className="receipt-a4 receipt-print-root"
       style={S.doc}
     >
-      {/* Cabeçalho: logo à esquerda + todos os dados da empresa à direita */}
+      {/* Cabeçalho */}
       <table
+        className="receipt-table"
         style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", ...S.borderB }}
         cellPadding={0}
         cellSpacing={0}
       >
         <colgroup>
-          <col style={{ width: "26%" }} />
-          <col style={{ width: "74%" }} />
+          <col style={{ width: "24%" }} />
+          <col style={{ width: "76%" }} />
         </colgroup>
         <tbody>
           <tr>
@@ -113,41 +132,41 @@ export function ReceiptPrintout({
                 borderRight: "1px solid #000",
                 verticalAlign: "middle",
                 textAlign: "center",
-                padding: "6px 4px",
-                minHeight: "78px",
+                padding: "8px 6px",
               }}
             >
               <img
                 src={logoSrc}
                 alt="Logo"
+                className="receipt-logo"
                 style={{
                   maxWidth: "100%",
                   width: "auto",
-                  maxHeight: "78px",
-                  minHeight: "56px",
+                  maxHeight: "82px",
+                  minHeight: "58px",
                   objectFit: "contain",
                   display: "block",
                   margin: "0 auto",
                 }}
               />
             </td>
-            <td style={{ ...S.cell, paddingBottom: "4px" }}>
-              <div style={{ ...S.bold, fontSize: "12.5px", lineHeight: 1.25, marginBottom: "3px" }}>
+            <td style={{ ...S.cell, paddingBottom: "6px" }}>
+              <div style={{ ...S.bold, fontSize: "14px", lineHeight: 1.3, marginBottom: "4px" }}>
                 {companyName}
               </div>
               {addressLines.line1 ? (
-                <div style={{ ...S.textSm, lineHeight: 1.3, marginBottom: "2px" }}>{addressLines.line1}</div>
+                <div style={{ ...S.textSm, marginBottom: "2px" }}>{addressLines.line1}</div>
               ) : null}
               {addressLines.line2 ? (
-                <div style={{ ...S.textSm, lineHeight: 1.3, marginBottom: "3px" }}>{addressLines.line2}</div>
+                <div style={{ ...S.textSm, marginBottom: "4px" }}>{addressLines.line2}</div>
               ) : null}
-              <table style={{ width: "100%", ...S.textSm, lineHeight: 1.35 }} cellPadding={0} cellSpacing={0}>
+              <table style={{ width: "100%", ...S.textSm }} cellPadding={0} cellSpacing={0}>
                 <tbody>
                   <tr>
-                    <td style={{ width: "58%", paddingRight: "4px" }}>
+                    <td style={{ width: "55%", paddingRight: "8px" }}>
                       <span style={S.bold}>CNPJ:</span> {v(company.cnpj)}
                     </td>
-                    <td style={{ width: "42%" }}>
+                    <td style={{ width: "45%" }}>
                       <span style={S.bold}>Insc. Est.:</span> {v(company.inscricao_estadual)}
                     </td>
                   </tr>
@@ -162,11 +181,11 @@ export function ReceiptPrintout({
                   <tr>
                     <td>
                       <span style={S.bold}>Número:</span>{" "}
-                      <span style={S.bold}>{v(receipt.numero_recibo, "—")}</span>
+                      <span style={S.value}>{v(receipt.numero_recibo, "—")}</span>
                     </td>
                     <td>
                       <span style={S.bold}>Data:</span>{" "}
-                      <span style={S.bold}>{formatDateBR(receipt.data_recibo, isBlank)}</span>
+                      <span style={S.value}>{formatDateBR(receipt.data_recibo, isBlank)}</span>
                     </td>
                   </tr>
                 </tbody>
@@ -180,122 +199,138 @@ export function ReceiptPrintout({
       </table>
 
       {/* Remetente | Destinatário */}
-      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", ...S.borderB }}>
+      <table
+        className="receipt-table"
+        style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", ...S.borderB }}
+      >
+        <colgroup>
+          <col style={{ width: "50%" }} />
+          <col style={{ width: "50%" }} />
+        </colgroup>
         <tbody>
           <tr>
-            <td style={{ ...S.cell, width: "50%", ...S.borderR }}>
+            <td style={{ ...S.cell, ...S.borderR }}>
               <Field label="Remetente:" value={v(receipt.remetente_nome)} isBlank={isBlank} />
               <Field label="Endereço:" value={v(receipt.remetente_endereco)} isBlank={isBlank} />
-              <span style={S.text}>
-                <span style={S.bold}>Cidade:</span> {v(receipt.remetente_cidade)}{" "}
-                <span style={S.bold}>UF:</span> {v(receipt.remetente_estado)}
-              </span>
+              <LinePair
+                leftLabel="Cidade:"
+                leftValue={v(receipt.remetente_cidade)}
+                rightLabel="UF:"
+                rightValue={v(receipt.remetente_estado)}
+              />
               <Field label="CNPJ / CPF:" value={v(receipt.remetente_cnpj_cpf)} isBlank={isBlank} />
             </td>
-            <td style={{ ...S.cell, width: "50%" }}>
+            <td style={S.cell}>
               <Field label="Destinatário:" value={v(receipt.destinatario_nome)} isBlank={isBlank} />
               <Field label="Endereço:" value={v(receipt.destinatario_endereco)} isBlank={isBlank} />
-              <span style={S.text}>
-                <span style={S.bold}>Cidade:</span> {v(receipt.destinatario_cidade)}{" "}
-                <span style={S.bold}>UF:</span> {v(receipt.destinatario_estado)}
-              </span>
+              <LinePair
+                leftLabel="Cidade:"
+                leftValue={v(receipt.destinatario_cidade)}
+                rightLabel="UF:"
+                rightValue={v(receipt.destinatario_estado)}
+              />
               <Field label="CNPJ / CPF:" value={v(receipt.destinatario_cnpj_cpf)} isBlank={isBlank} />
             </td>
           </tr>
         </tbody>
       </table>
 
-      <div style={{ ...S.cell, ...S.borderB, ...S.text }}>
+      <div style={{ ...S.cell, ...S.borderB, ...S.text, paddingTop: "7px", paddingBottom: "7px" }}>
         <span style={S.bold}>Obs.:</span> {obsText || "\u00A0"}
       </div>
 
-      {/* Mercadoria Transportada — grade como no espelho original */}
-      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+      {/* Mercadoria — grade 4 colunas alinhadas */}
+      <table
+        className="receipt-table receipt-table-mercadoria"
+        style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}
+      >
+        {COL_4}
         <tbody>
           <tr>
-            <td colSpan={12} style={S.cellBox}>
+            <td colSpan={4} style={S.cellBox}>
               <span style={S.sectionTitle}>Mercadoria Transportada</span>
             </td>
           </tr>
           <tr>
-            <td colSpan={12} style={S.cellBox}>
+            <td colSpan={4} style={S.cellBox}>
               <span style={S.bold}>Documento Fiscal:</span>{" "}
-              {v(receipt.mercadoria_documento_fiscal)}
-              {receipt.mercadoria_documento_fiscal && !isBlank ? ";" : ""}
-            </td>
-          </tr>
-          <tr>
-            <td colSpan={12} style={S.cellBox}>
-              <span style={S.bold}>Mercadoria:</span> {v(receipt.mercadoria_natureza)}
-              {receipt.mercadoria_natureza && !isBlank ? ";" : ""}
+              <span style={S.value}>{v(receipt.mercadoria_documento_fiscal)}</span>
             </td>
           </tr>
           <tr>
             <td colSpan={4} style={S.cellBox}>
-              <span style={S.bold}>Quantidade:</span>{" "}
-              {formatDecimal(receipt.mercadoria_quantidade, isBlank, 2)}
-            </td>
-            <td colSpan={4} style={S.cellBox}>
-              <span style={S.bold}>Peso:</span> {formatDecimal(receipt.mercadoria_peso, isBlank, 2)}
-            </td>
-            <td colSpan={4} style={S.cellBox}>
-              <span style={S.bold}>Valor da Mercadoria:</span> {formatBRL(receipt.mercadoria_valor, isBlank)}
+              <span style={S.bold}>Mercadoria:</span>{" "}
+              <span style={S.value}>{v(receipt.mercadoria_natureza)}</span>
             </td>
           </tr>
           <tr>
-            <td colSpan={3} style={S.cellBox}>
-              <span style={S.bold}>Valor ICMS:</span> {formatBRL(receipt.valor_icms, isBlank)}
+            <td style={S.cellBox}>
+              <span style={S.bold}>Quantidade:</span>
+              <div style={S.value}>{formatDecimal(receipt.mercadoria_quantidade, isBlank, 2)}</div>
             </td>
-            <td colSpan={3} style={S.cellBox}>
-              <span style={S.bold}>Valor Seguro:</span> {formatBRL(receipt.valor_seguro, isBlank)}
+            <td style={S.cellBox}>
+              <span style={S.bold}>Peso:</span>
+              <div style={S.value}>{formatDecimal(receipt.mercadoria_peso, isBlank, 2)}</div>
             </td>
-            <td colSpan={3} style={S.cellBox}>
-              <span style={S.bold}>Outros Valores:</span> {formatBRL(receipt.valor_outros, isBlank)}
+            <td colSpan={2} style={S.cellBox}>
+              <span style={S.bold}>Valor da Mercadoria:</span>
+              <div style={S.value}>{formatBRL(receipt.mercadoria_valor, isBlank)}</div>
             </td>
-            <td colSpan={3} style={S.cellBox}>
-              <span style={S.bold}>Total:</span>{" "}
-              <span style={S.bold}>{formatBRL(receipt.valor_total_frete, isBlank)}</span>
+          </tr>
+          <tr>
+            <td style={S.cellBox}>
+              <span style={S.bold}>Valor ICMS:</span>
+              <div style={S.value}>{formatBRL(receipt.valor_icms, isBlank)}</div>
+            </td>
+            <td style={S.cellBox}>
+              <span style={S.bold}>Valor Seguro:</span>
+              <div style={S.value}>{formatBRL(receipt.valor_seguro, isBlank)}</div>
+            </td>
+            <td style={S.cellBox}>
+              <span style={S.bold}>Outros Valores:</span>
+              <div style={S.value}>{formatBRL(receipt.valor_outros, isBlank)}</div>
+            </td>
+            <td style={S.cellBox}>
+              <span style={S.bold}>Total:</span>
+              <div style={{ ...S.value, fontSize: "14px" }}>{formatBRL(receipt.valor_total_frete, isBlank)}</div>
             </td>
           </tr>
         </tbody>
       </table>
 
-      <div style={{ ...S.cell, paddingTop: "5px" }}>
-        <span style={S.sectionTitle}>Veículo</span>
-      </div>
-
-      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", ...S.borderB }}>
+      {/* Veículo / motorista — mesma estrutura de duas colunas */}
+      <table
+        className="receipt-table"
+        style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", ...S.borderB }}
+      >
+        <colgroup>
+          <col style={{ width: "50%" }} />
+          <col style={{ width: "50%" }} />
+        </colgroup>
         <tbody>
           <tr>
-            <td style={{ ...S.cell, width: "50%", ...S.borderR }}>
+            <td colSpan={2} style={S.cellBox}>
+              <span style={S.sectionTitle}>Veículo</span>
+            </td>
+          </tr>
+          <tr>
+            <td style={{ ...S.cellBox, ...S.borderR }}>
               <Field label="Motorista:" value={v(receipt.motorista_nome)} isBlank={isBlank} />
               <Field label="CPF:" value={v(receipt.motorista_cpf)} isBlank={isBlank} />
-              <span style={S.text}>
-                <span style={S.bold}>Placa:</span> {v(receipt.veiculo_placa)}{" "}
-                <span style={S.bold}>UF:</span> {v(receipt.veiculo_estado)}
-              </span>
+              <LinePair
+                leftLabel="Placa:"
+                leftValue={v(receipt.veiculo_placa)}
+                rightLabel="UF:"
+                rightValue={v(receipt.veiculo_estado)}
+              />
             </td>
-            <td style={{ ...S.cell, width: "50%" }}>
+            <td style={S.cellBox}>
               <Field label="Fatura:" value={v(faturaNome)} isBlank={isBlank} />
               <Field label="Agente:" value={v(agenteNome)} isBlank={isBlank} />
             </td>
           </tr>
         </tbody>
       </table>
-
-      <p
-        style={{
-          marginTop: "10px",
-          fontSize: "9.5px",
-          color: "#444",
-          textAlign: "right",
-          paddingRight: "4px",
-          paddingLeft: "4px",
-        }}
-      >
-        Fim do Relatório — Emitido por M.A.F Transportes e Seguros de Cargas em{" "}
-        {formatDateTimeFooter(issuedAt)}
-      </p>
     </div>
   );
 }
@@ -310,13 +345,33 @@ function Field({
   isBlank?: boolean;
 }) {
   return (
-    <div style={{ marginBottom: "3px", ...S.text, wordBreak: "break-word" }}>
+    <div style={{ marginBottom: "5px", ...S.text, wordBreak: "break-word" }}>
       <span style={S.bold}>{label}</span>{" "}
       {isBlank && !value.trim() ? (
-        <span style={{ borderBottom: "1px dashed #999", display: "inline-block", minWidth: "40px" }} />
+        <span style={{ borderBottom: "1px dashed #666", display: "inline-block", minWidth: "48px" }} />
       ) : (
-        value || "\u00A0"
+        <span style={S.value}>{value || "\u00A0"}</span>
       )}
+    </div>
+  );
+}
+
+function LinePair({
+  leftLabel,
+  leftValue,
+  rightLabel,
+  rightValue,
+}: {
+  leftLabel: string;
+  leftValue: string;
+  rightLabel: string;
+  rightValue: string;
+}) {
+  return (
+    <div style={{ ...S.text, marginBottom: "5px" }}>
+      <span style={S.bold}>{leftLabel}</span> <span style={S.value}>{leftValue}</span>
+      {" · "}
+      <span style={S.bold}>{rightLabel}</span> <span style={S.value}>{rightValue}</span>
     </div>
   );
 }
