@@ -17,6 +17,8 @@ export interface ModalShellProps {
   /** Clique no fundo escuro fecha. */
   closeOnBackdrop?: boolean;
   ariaLabel?: string;
+  overlayClassName?: string;
+  panelClassName?: string;
 }
 
 /**
@@ -33,6 +35,8 @@ export function ModalShell({
   footer,
   closeOnBackdrop = false,
   ariaLabel = "Diálogo",
+  overlayClassName = "",
+  panelClassName = "",
 }: ModalShellProps) {
   useBodyScrollLock(open);
 
@@ -40,7 +44,7 @@ export function ModalShell({
 
   return createPortal(
     <div
-      className={`fixed inset-0 ${zIndexClassName} flex items-center justify-center overflow-hidden bg-black/50 overscroll-none p-3 sm:p-4`}
+      className={`fixed inset-0 ${zIndexClassName} flex items-center justify-center overflow-hidden bg-black/50 overscroll-none p-3 sm:p-4 ${overlayClassName}`}
       style={{
         paddingTop: "max(0.75rem, env(safe-area-inset-top))",
         paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
@@ -49,7 +53,7 @@ export function ModalShell({
       onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
-        className={`flex flex-col w-full min-h-0 ${maxWidthClassName} max-h-full bg-white shadow-2xl overflow-hidden rounded-2xl`}
+        className={`flex flex-col w-full min-h-0 ${maxWidthClassName} max-h-full bg-white shadow-2xl overflow-hidden rounded-2xl ${panelClassName}`}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}

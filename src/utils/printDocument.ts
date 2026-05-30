@@ -6,6 +6,8 @@ const MARGIN_MM = 10;
 const JPEG_QUALITY = 0.94;
 const CAPTURE_WIDTH_MM = 190;
 
+const PRINT_BODY_CLASS = "is-printing-receipt";
+
 /** Remove caracteres inválidos no nome do arquivo PDF */
 function sanitizeForFileName(text: string): string {
   return text
@@ -67,81 +69,57 @@ async function captureReceiptElement(el: HTMLElement): Promise<HTMLCanvasElement
   }
 }
 
-/** Baixa o PDF (sempre funciona, inclusive com CSP restritivo). */
-function downloadPdf(pdf: jsPDF, fileName: string): void {
-  pdf.save(`${fileName}.pdf`);
+async function buildReceiptPdfFromElement(elementId: string): Promise<jsPDF> {
+  const el = document.getElementById(elementId);
+  if (!el) {
+    throw new Error("Documento não encontrado. Abra o espelho pelo Histórico e tente de novo.");
+  }
+  const canvas = await captureReceiptElement(el);
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  addCanvasToPdf(pdf, canvas);
+  return pdf;
 }
 
 /**
- * Abre o PDF em nova aba e chama impressão.
- * Evita iframe + blob: (bloqueado por CSP em produção).
+ * Imprime na impressora sem sair da página (diálogo do sistema sobre o modal).
+ * Não abre nova aba nem baixa arquivo automaticamente.
  */
-function printPdfBlob(pdf: jsPDF, fileName: string): void {
-  const blob = pdf.output("blob");
-  const url = URL.createObjectURL(blob);
-  const safeName = `${fileName}.pdf`;
-
-  const revokeLater = () => {
-    setTimeout(() => URL.revokeObjectURL(url), 120_000);
-  };
-
-  const popup = window.open(url, "_blank", "noopener,noreferrer");
-  if (!popup) {
-    URL.revokeObjectURL(url);
-    downloadPdf(pdf, fileName);
-    window.alert(
-      "Não foi possível abrir a janela de impressão (pop-up bloqueado).\n\n" +
-        "O PDF foi baixado — abra o arquivo e use Imprimir no leitor de PDF."
-    );
-    return;
-  }
-
-  let printed = false;
-  const triggerPrint = () => {
-    if (printed) return;
-    printed = true;
-    try {
-      popup.focus();
-      popup.print();
-    } catch {
-      downloadPdf(pdf, fileName);
-      window.alert(
-        "Abra o PDF na nova aba e use Ctrl+P (ou Imprimir).\n\n" +
-          "Desmarque «Cabeçalhos e rodapés» na impressora."
-      );
-    }
-    revokeLater();
-  };
-
-  try {
-    popup.addEventListener("load", () => setTimeout(triggerPrint, 800), { once: true });
-  } catch {
-    /* cross-origin em alguns navegadores — usa timeout */
-  }
-
-  setTimeout(triggerPrint, 1500);
-  setTimeout(() => {
-    if (!printed) triggerPrint();
-  }, 3500);
-}
-
-/**
- * Gera PDF do espelho e abre a impressão — sem URL/data do site no documento.
- */
-export async function printReceiptDocument(
-  elementId = "print-document",
-  options?: PrintReceiptOptions
-): Promise<void> {
+export function printReceiptInPage(elementId = "print-document"): void {
   const el = document.getElementById(elementId);
   if (!el) {
     window.alert("Documento não encontrado. Abra o espelho pelo Histórico e tente de novo.");
     return;
   }
 
-  const canvas = await captureReceiptElement(el);
-  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  addCanvasToPdf(pdf, canvas);
+  const prevTitle = document.title;
+  document.title = " ";
+  document.body.classList.add(PRINT_BODY_CLASS);
 
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    document.body.classList.remove(PRINT_BODY_CLASS);
+    document.title = prevTitle;
+  };
+
+  window.addEventListener("afterprint", cleanup, { once: true });
+  setTimeout(cleanup, 120_000);
+
+  requestAnimationFrame(() => {
+    window.focus();
+    window.print();
+  });
+}
+
+/**
+ * Baixa PDF somente quando o usuário clicar em «Baixar PDF».
+ */
+export async function downloadReceiptPdf(
+  elementId = "print-document",
+  options?: PrintReceiptOptions
+): Promise<void> {
+  const pdf = await buildReceiptPdfFromElement(elementId);
   const fileName = buildReceiptPdfTitle(options?.driverName);
-  printPdfBlob(pdf, fileName);
+  pdf.save(`${fileName}.pdf`);
 }

@@ -9,9 +9,9 @@ import { LoginPage } from "./components/LoginPage";
 import { AccountTab } from "./components/AccountTab";
 import { AppLayout } from "./components/AppLayout";
 import { api } from "./api";
-import { printReceiptDocument } from "./utils/printDocument";
+import { downloadReceiptPdf, printReceiptInPage } from "./utils/printDocument";
 import { ModalShell } from "./components/ModalShell";
-import { CheckCircle, Printer, X } from "lucide-react";
+import { CheckCircle, Download, Printer, X } from "lucide-react";
 
 const EMPTY_COMPANY: CompanyProfile = {
   nome_empresa: "",
@@ -45,7 +45,7 @@ export default function App() {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [selectedReceiptForEdit, setSelectedReceiptForEdit] = useState<Partial<Receipt> | null>(null);
   const [printPreviewReceipt, setPrintPreviewReceipt] = useState<Receipt | null>(null);
-  const [isPrintingReceipt, setIsPrintingReceipt] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authUser, setAuthUser] = useState<{ nome: string; username: string; role?: string } | null>(null);
@@ -394,6 +394,8 @@ export default function App() {
       <ModalShell
         open={!!printPreviewReceipt}
         maxWidthClassName="max-w-4xl"
+        overlayClassName="print-modal-backdrop"
+        panelClassName="print-modal-shell"
         ariaLabel="Visualizar espelho para impressão"
         header={
           printPreviewReceipt ? (
@@ -404,40 +406,59 @@ export default function App() {
                   Espelho nº {printPreviewReceipt.numero_recibo}
                 </p>
                 <p className="text-xs text-slate-600 mt-1 leading-snug">
-                  Use o botão <strong>Imprimir</strong> abaixo (gera PDF limpo, sem URL nem data do
-                  Windows). Se usar Ctrl+P no navegador, desmarque{" "}
-                  <strong>Cabeçalhos e rodapés</strong>.
+                  <strong>Imprimir</strong> abre o diálogo da impressora aqui na página.{" "}
+                  <strong>Baixar PDF</strong> só salva o arquivo se você quiser. Na impressora,
+                  desmarque <strong>Cabeçalhos e rodapés</strong> para não sair URL nem data.
                 </p>
               </div>
-              <div className="flex gap-2 shrink-0 w-full sm:w-auto">
-                <button
-                  type="button"
-                  disabled={isPrintingReceipt}
-                  onClick={() => {
-                    if (!printPreviewReceipt || isPrintingReceipt) return;
-                    setIsPrintingReceipt(true);
-                    void printReceiptDocument("print-document", {
-                      driverName: printPreviewReceipt.motorista_nome,
+              <button
+                type="button"
+                onClick={() => setPrintPreviewReceipt(null)}
+                className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 cursor-pointer shrink-0"
+                aria-label="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          ) : null
+        }
+        footer={
+          printPreviewReceipt ? (
+            <div className="no-print border-t border-slate-200 px-3 sm:px-4 py-3 flex flex-wrap gap-2 justify-end bg-white">
+              <button
+                type="button"
+                onClick={() => setPrintPreviewReceipt(null)}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Fechar
+              </button>
+              <button
+                type="button"
+                disabled={isDownloadingPdf}
+                onClick={() => {
+                  if (!printPreviewReceipt || isDownloadingPdf) return;
+                  setIsDownloadingPdf(true);
+                  void downloadReceiptPdf("print-document", {
+                    driverName: printPreviewReceipt.motorista_nome,
+                  })
+                    .catch(() => {
+                      window.alert("Não foi possível gerar o PDF. Tente novamente.");
                     })
-                      .catch(() => {
-                        window.alert("Não foi possível preparar a impressão. Tente novamente.");
-                      })
-                      .finally(() => setIsPrintingReceipt(false));
-                  }}
-                  className="flex-1 sm:flex-none px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-wait text-white text-sm font-semibold rounded-lg cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Printer className="w-4 h-4" />
-                  {isPrintingReceipt ? "Preparando…" : "Imprimir"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPrintPreviewReceipt(null)}
-                  className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 cursor-pointer"
-                  aria-label="Fechar"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+                    .finally(() => setIsDownloadingPdf(false));
+                }}
+                className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-800 hover:bg-slate-50 cursor-pointer flex items-center gap-2 disabled:opacity-60"
+              >
+                <Download className="w-4 h-4" />
+                {isDownloadingPdf ? "Gerando PDF…" : "Baixar PDF"}
+              </button>
+              <button
+                type="button"
+                onClick={() => printReceiptInPage("print-document")}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold cursor-pointer flex items-center gap-2"
+              >
+                <Printer className="w-4 h-4" />
+                Imprimir
+              </button>
             </div>
           ) : null
         }

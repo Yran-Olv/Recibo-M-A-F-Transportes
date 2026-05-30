@@ -104,6 +104,7 @@ html.modal-open body {
   }
 
   /* Modal de impressão: fundo branco, sem overlay escuro */
+  body.is-printing-receipt .print-modal-backdrop,
   body.is-printing-receipt .print-modal-shell {
     position: static !important;
     inset: auto !important;
